@@ -15,8 +15,8 @@ It uses national wind actuals and forecasts from Elexon BMRS for January 2026, s
 
 ## Live app and video
 
-- **Live app:** _add the deployed URL before submitting_
-- **Demo video:** _add the video URL before submitting_
+- **Live app:** <https://windsight-sda4.onrender.com>
+- **Demo video:** _captioned silent walkthrough — link added after recording_
 
 The repository name is intentionally anonymous for the exercise.
 
@@ -256,7 +256,10 @@ heroku open -a <anonymous-app-name>
 
 ### Render
 
-Create a new Blueprint from the repository. `render.yaml` points at the Dockerfile and uses `/api/health` as the health check.
+The live service is deployed from this repository on Render's free Docker plan:
+<https://windsight-sda4.onrender.com>. The free instance spins down when idle, so
+the first request can take 30–60 seconds. `render.yaml` points at the Dockerfile
+and uses `/api/health` as the health check.
 
 ### Vercel
 

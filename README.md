@@ -16,7 +16,7 @@ It uses national wind actuals and forecasts from Elexon BMRS for January 2026, s
 ## Live app and video
 
 - **Live app:** <https://windsight-sda4.onrender.com>
-- **Demo video:** _captioned silent walkthrough — link added after recording_
+- **Demo video:** [8:12 captioned walkthrough](https://github.com/AasheeshLikePanner/windsight-pilot/releases/download/v0.1.0/windsight-silent-walkthrough.mp4)
 
 The repository name is intentionally anonymous for the exercise.
 

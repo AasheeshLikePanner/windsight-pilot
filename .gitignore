@@ -10,3 +10,4 @@ frontend/dist/
 .vercel/
 *.db-wal
 *.db-shm
+docs/*.mp4

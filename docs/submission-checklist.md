@@ -35,7 +35,7 @@
 ## Video
 
 - [x] Captioned walkthrough: <https://github.com/AasheeshLikePanner/windsight-pilot/releases/download/v0.1.0/windsight-silent-walkthrough.mp4>
-- [x] 8:12, covering the decision view, accuracy lab, methodology, architecture,
+- [x] 7:28, covering the decision view, accuracy lab, methodology, architecture,
       tests, and deployment.
 - [x] Shows the live app, decision view, accuracy view, tests, and limitations.
 - [x] Silent by design (captioned); no personal tabs or notifications. Add a

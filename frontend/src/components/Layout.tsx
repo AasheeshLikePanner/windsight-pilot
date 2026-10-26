@@ -35,6 +35,7 @@ export function Layout() {
                 key={item.to}
                 to={item.to}
                 end={item.end}
+                aria-label={item.label}
                 className={({ isActive }) =>
                   `nav__link${isActive ? " is-active" : ""}`
                 }

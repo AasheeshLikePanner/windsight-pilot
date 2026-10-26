@@ -2,7 +2,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export function LoadingBlock({ lines = 4 }: { lines?: number }) {
   return (
-    <div className="skeleton" aria-label="Loading">
+    <div className="skeleton" aria-label="Loading" role="status">
       {Array.from({ length: lines }, (_, index) => (
         <div
           className="skeleton__line"

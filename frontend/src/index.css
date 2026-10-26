@@ -1,21 +1,21 @@
 :root {
   color-scheme: dark;
-  --bg: #070d18;
-  --panel: rgba(15, 26, 45, 0.78);
-  --panel-solid: #0f1a2d;
-  --border: #1e2b45;
-  --border-strong: #2a3b5c;
-  --text: #e8eef8;
-  --muted: #94a3b8;
-  --muted-2: #6b7c96;
+  --bg: #080e18;
+  --panel: rgba(13, 22, 37, 0.82);
+  --panel-solid: #0d1625;
+  --border: #1d2a40;
+  --border-strong: #2b3a56;
+  --text: #e6edf7;
+  --muted: #8fa0b6;
+  --muted-2: #7387a3;
   --teal: #2dd4bf;
-  --teal-soft: rgba(45, 212, 191, 0.12);
+  --teal-soft: rgba(45, 212, 191, 0.1);
   --amber: #f5b942;
-  --amber-soft: rgba(245, 185, 66, 0.12);
+  --amber-soft: rgba(245, 185, 66, 0.1);
   --red: #f87171;
-  --red-soft: rgba(248, 113, 113, 0.12);
+  --red-soft: rgba(248, 113, 113, 0.1);
   --blue: #38bdf8;
-  --radius: 18px;
+  --radius: 14px;
   --font: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
@@ -35,8 +35,7 @@ body {
   font-family: var(--font);
   color: var(--text);
   background:
-    radial-gradient(900px 520px at 12% -8%, rgba(45, 212, 191, 0.09), transparent 62%),
-    radial-gradient(820px 520px at 102% -4%, rgba(56, 189, 248, 0.07), transparent 58%),
+    radial-gradient(1000px 560px at 50% -20%, rgba(45, 212, 191, 0.05), transparent 70%),
     var(--bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -44,6 +43,12 @@ body {
 
 a {
   color: var(--teal);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.5);
+  outline-offset: 2px;
 }
 
 button,
@@ -70,8 +75,7 @@ p {
   flex-direction: column;
   gap: 26px;
   border-right: 1px solid var(--border);
-  background: rgba(8, 15, 28, 0.72);
-  backdrop-filter: blur(14px);
+  background: #08111f;
   z-index: 10;
 }
 
@@ -84,8 +88,8 @@ p {
 .brand__mark {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.22), rgba(56, 189, 248, 0.06));
+  border-radius: 10px;
+  background: var(--teal-soft);
   border: 1px solid rgba(45, 212, 191, 0.28);
   display: grid;
   place-items: center;
@@ -274,7 +278,7 @@ h1 {
 
 .button:hover {
   border-color: var(--border-strong);
-  background: #142139;
+  background: #13203a;
 }
 
 .button--ghost {
@@ -293,11 +297,10 @@ h1 {
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(17, 29, 50, 0.9), rgba(12, 22, 39, 0.86));
+  background: var(--panel-solid);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 22px;
-  box-shadow: 0 24px 60px -40px rgba(0, 0, 0, 0.9);
+  padding: 20px;
   min-width: 0;
 }
 
@@ -342,8 +345,8 @@ h1 {
 .kpi {
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(23, 38, 63, 0.72), rgba(12, 22, 39, 0.62));
+  border-radius: 12px;
+  background: var(--panel-solid);
   position: relative;
   overflow: hidden;
   min-width: 0;
@@ -840,6 +843,17 @@ h1 {
   margin-bottom: 18px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .skeleton__line {
+    animation: none;
+  }
+
+  .nav__link,
+  .button {
+    transition: none;
+  }
+}
+
 @media (max-width: 1180px) {
   .grid-2,
   .grid-3 {
@@ -904,6 +918,15 @@ h1 {
     display: none;
   }
 
+  .data-table {
+    font-size: 11.5px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 7px;
+  }
+
   .nav__link span {
     display: none;
   }
@@ -947,5 +970,11 @@ h1 {
 
   .notice .button {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 340px) {
+  .data-table .hide-xs {
+    display: none;
   }
 }

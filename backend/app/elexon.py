@@ -116,12 +116,26 @@ class ElexonClient:
             if generation is None:
                 logger.warning("Skipping actual with invalid generation: %s", row)
                 continue
-            start = parse_utc(row["startTime"])
-            publish = parse_utc(row["publishTime"]) if row.get("publishTime") else None
+            try:
+                start = parse_utc(row["startTime"])
+                settlement_date = date.fromisoformat(row["settlementDate"])
+                settlement_period = int(row["settlementPeriod"])
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning("Skipping malformed actual (%s): %s", exc, row)
+                continue
+            try:
+                publish = (
+                    parse_utc(row["publishTime"]) if row.get("publishTime") else None
+                )
+            except ValueError as exc:
+                logger.warning(
+                    "Ignoring invalid actual publish time (%s): %s", exc, row
+                )
+                publish = None
             candidate = Actual(
                 start_time=start,
-                settlement_date=date.fromisoformat(row["settlementDate"]),
-                settlement_period=int(row["settlementPeriod"]),
+                settlement_date=settlement_date,
+                settlement_period=settlement_period,
                 generation_mw=generation,
                 publish_time=publish,
             )
@@ -163,8 +177,12 @@ class ElexonClient:
             if generation is None:
                 logger.warning("Skipping forecast with invalid generation: %s", row)
                 continue
-            start_time = parse_utc(row["startTime"])
-            publish_time = parse_utc(row["publishTime"])
+            try:
+                start_time = parse_utc(row["startTime"])
+                publish_time = parse_utc(row["publishTime"])
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning("Skipping malformed forecast (%s): %s", exc, row)
+                continue
             if not (start <= start_time < end):
                 continue
             if publish_time > publish_to:

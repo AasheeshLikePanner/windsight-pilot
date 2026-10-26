@@ -7,6 +7,10 @@ const decimalFormat = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 1,
 });
 
+const tickFormat = new Intl.NumberFormat("en-GB", {
+  maximumFractionDigits: 1,
+});
+
 export function mw(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${numberFormat.format(value)} MW`;
@@ -20,6 +24,11 @@ export function gw(value: number | null | undefined): string {
 export function gwh(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${decimalFormat.format(value)} GWh`;
+}
+
+export function gwTick(value: number): string {
+  if (!Number.isFinite(value)) return "";
+  return `${tickFormat.format(value / 1000)}\u00A0GW`;
 }
 
 export function pct(value: number | null | undefined, digits = 1): string {

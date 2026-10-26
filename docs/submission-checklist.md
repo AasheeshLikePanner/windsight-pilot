@@ -20,8 +20,10 @@
 - [x] `/api/health`, `/api/decision?date=2026-01-15`, and
       `/api/accuracy?from=2026-01-01&to=2026-01-31` respond.
 - [x] Deep link `/accuracy` and `/methodology` work on refresh.
+- [x] Empty-snapshot and API-failure states were checked; retries recover.
+- [x] Out-of-range API dates return `400`.
 - [x] Desktop and mobile layouts checked.
-- [x] `pytest -q` (15 passed) and `ruff check app tests` pass.
+- [x] `pytest -q` (18 passed) and `ruff check app tests` pass.
 - [x] `npm run build` passes.
 
 ## Deployment

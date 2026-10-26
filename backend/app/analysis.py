@@ -45,11 +45,16 @@ def quantile(values: Iterable[float], q: float) -> float:
 
 
 def hourly_actuals(actuals: Iterable[Actual]) -> dict[datetime, float]:
-    """Average the two half-hourly readings into an hourly MW value."""
+    """Average complete pairs of half-hourly readings into hourly MW values.
+
+    A half-hour with no matching pair is omitted rather than silently treating a
+    single reading as a full-hour average. Missing coverage is surfaced by the
+    decision-point count and coverage metric.
+    """
     buckets: dict[datetime, list[float]] = defaultdict(list)
     for actual in actuals:
         buckets[floor_hour(actual.start_time)].append(actual.generation_mw)
-    return {hour: mean(values) for hour, values in buckets.items()}
+    return {hour: mean(values) for hour, values in buckets.items() if len(values) >= 2}
 
 
 def latest_forecasts(
@@ -303,6 +308,8 @@ def error_quantiles_by_level(
 
 
 def _level_for_forecast(forecast_mw: float) -> str:
+    if forecast_mw < LEVEL_BUCKETS[0][0]:
+        return LEVEL_BUCKETS[0][2]
     for low, high, label in LEVEL_BUCKETS:
         if low <= forecast_mw < high:
             return label

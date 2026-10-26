@@ -38,6 +38,7 @@ import {
   dateTime,
   gwh,
   gw,
+  gwTick,
   longDate,
   mw,
   pct,
@@ -77,55 +78,66 @@ export function DecisionRoom() {
   const [dates, setDates] = useState<DateCoverage[]>([]);
   const [selected, setSelected] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [indexLoading, setIndexLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [indexError, setIndexError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-    Promise.all([fetchMeta(), fetchDates()])
+    const controller = new AbortController();
+    Promise.all([fetchMeta(controller.signal), fetchDates(controller.signal)])
       .then(([metaData, dateRows]) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setMeta(metaData);
         setDates(dateRows);
         setIndexError(null);
-        setSelected((current) => {
-          if (current) return current;
-          return dateRows.at(-1)?.date ?? "";
-        });
+        setIndexLoading(false);
+        setLoading(dateRows.length > 0);
+        setSelected((current) =>
+          dateRows.some((row) => row.date === current)
+            ? current
+            : (dateRows.at(-1)?.date ?? ""),
+        );
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
+        setIndexLoading(false);
         setIndexError(
           reason instanceof Error ? reason.message : "Could not load the data index.",
         );
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [reloadKey]);
 
   useEffect(() => {
-    if (!selected) return;
-    let cancelled = false;
+    if (!selected) {
+      setDecision(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setDecision(null);
     setLoading(true);
     setError(null);
-    fetchDecision(selected)
+    fetchDecision(selected, controller.signal)
       .then((data) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setDecision(data);
         setLoading(false);
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setError(
           reason instanceof Error ? reason.message : "Could not load this decision.",
         );
         setLoading(false);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [selected, reloadKey]);
 
@@ -181,6 +193,7 @@ export function DecisionRoom() {
     {
       header: "Forecast",
       align: "right",
+      className: "hide-sm",
       render: (row) => mw(row.forecast_mw),
     },
     {
@@ -252,13 +265,6 @@ export function DecisionRoom() {
         />
       ) : null}
 
-      {meta && !meta.data_ready ? (
-        <EmptyState
-          title="No cached Elexon data"
-          message="Run the ingestion command to build the SQLite snapshot, then reload this page."
-        />
-      ) : null}
-
       {error ? (
         <ErrorNotice
           message={error}
@@ -266,7 +272,10 @@ export function DecisionRoom() {
         />
       ) : null}
 
-      {loading && !decision ? (
+      {!decision &&
+      !error &&
+      !indexError &&
+      (indexLoading || loading) ? (
         <>
           <div className="kpi-grid">
             {Array.from({ length: 6 }, (_, index) => (
@@ -279,6 +288,18 @@ export function DecisionRoom() {
             <LoadingBlock lines={8} />
           </SectionCard>
         </>
+      ) : null}
+
+      {!decision &&
+      !error &&
+      !indexError &&
+      !indexLoading &&
+      !loading &&
+      dates.length === 0 ? (
+        <EmptyState
+          title="No delivery dates in the snapshot"
+          message="The cache is empty or incomplete. Rebuild the Elexon snapshot, then reload this page."
+        />
       ) : null}
 
       {decision && summary && summary.n > 0 ? (
@@ -337,7 +358,11 @@ export function DecisionRoom() {
                 </Badge>
               }
             >
-              <div className="chart chart--main">
+              <div
+                className="chart chart--main"
+                role="img"
+                aria-label="Half-hourly actual wind generation against the pre-gate forecast, with a P10 to P90 uncertainty band."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={chartRows}
@@ -347,9 +372,7 @@ export function DecisionRoom() {
                     <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={28} {...axisProps} />
                     <YAxis
                       domain={[0, "auto"]}
-                      tickFormatter={(value: number) =>
-                        `${Math.round(value / 1000)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip
@@ -479,7 +502,11 @@ export function DecisionRoom() {
                 </Badge>
               }
             >
-              <div className="chart chart--small">
+              <div
+                className="chart chart--small"
+                role="img"
+                aria-label="Half-hourly forecast error; positive bars are over-forecasts and negative bars are shortfalls."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={errorRows}
@@ -488,9 +515,7 @@ export function DecisionRoom() {
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={28} {...axisProps} />
                     <YAxis
-                      tickFormatter={(value: number) =>
-                        `${Math.round(value / 1000)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip

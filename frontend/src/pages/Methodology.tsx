@@ -131,9 +131,11 @@ export function Methodology() {
             </p>
             <p>
               All summary metrics use the 24 hourly decision points. For each
-              hour, the actual is the mean of its two half-hour readings. This
-              keeps the error calculation on the forecast&apos;s native
-              resolution and avoids implying precision the data does not have.
+              hour, the actual is the mean of its two half-hour readings. An
+              incomplete pair is omitted rather than treated as a full-hour
+              average, so a data gap shows up as lower coverage. This keeps the
+              error calculation on the forecast&apos;s native resolution and
+              avoids implying precision the data does not have.
             </p>
           </div>
         </SectionCard>
@@ -270,7 +272,7 @@ uvicorn app.main:app --reload --port 8000`}</code>
             <p>Frontend:</p>
             <pre>
               <code>{`cd frontend
-npm install
+npm ci
 npm run dev`}</code>
             </pre>
             <p>

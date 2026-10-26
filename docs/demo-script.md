@@ -106,10 +106,10 @@ fallback. It is empirical and explicitly not a calibrated probability.”
 
 **Show:** terminal `pytest -q`, then `docker build` output or the deployed URL.
 
-**Say:** “Fifteen backend tests cover gate closure, vintage selection,
+**Say:** “Eighteen backend tests cover gate closure, vintage selection,
 aggregation, known metric values, quantiles, store idempotence, the Elexon
-filtering, and every API endpoint including invalid input. The frontend build
-is the typecheck. The Dockerfile is multi-stage and honours `$PORT`; Heroku and
+filtering, snapshot date bounds, and every API endpoint including invalid input.
+The frontend build is the typecheck. The Dockerfile is multi-stage and honours `$PORT`; Heroku and
 Render can run it directly. The single-image trade-off is documented in the
 ADR.”
 

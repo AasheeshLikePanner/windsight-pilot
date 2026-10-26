@@ -13,10 +13,9 @@ export const COLORS = {
 };
 
 export const tooltipStyle: CSSProperties = {
-  backgroundColor: "#0c1627",
+  backgroundColor: "#0d1625",
   border: "1px solid #24324a",
-  borderRadius: 12,
-  boxShadow: "0 18px 40px rgba(0, 0, 0, 0.35)",
+  borderRadius: 10,
   color: "#e2e8f0",
   fontSize: 12,
   padding: "10px 12px",

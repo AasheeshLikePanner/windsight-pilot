@@ -78,6 +78,18 @@ def test_decision_points_average_half_hours() -> None:
     assert first.lead_time_hours == pytest.approx(14.5)
 
 
+def test_incomplete_half_hour_pair_is_not_treated_as_an_hour() -> None:
+    actuals = actuals_for(DAY)
+    missing_one = [
+        row
+        for row in actuals
+        if row.start_time != datetime(2026, 1, 15, 0, 30, tzinfo=UTC)
+    ]
+    points = decision_points_for_day(DAY, missing_one, forecasts_for(DAY))
+    assert len(points) == 23
+    assert all(point.start_time.hour != 0 for point in points)
+
+
 def test_compute_metrics_known_values() -> None:
     published = datetime(2026, 1, 1, tzinfo=UTC)
     points = [
@@ -124,6 +136,14 @@ def test_histogram_bins_signed_errors() -> None:
     bins = histogram(points[:4], bin_width=1_000)
     assert sum(item["count"] for item in bins) == 4
     assert bins[0]["bin_start_mw"] <= points[0].error_mw
+
+
+def test_band_handles_a_negative_forecast() -> None:
+    points = decision_points_for_day(DAY, actuals_for(DAY), forecasts_for(DAY))
+    band = band_for_forecast(-500, error_quantiles_by_level(points))
+    assert band["level"] == "0–5 GW"
+    assert band["lower_mw"] >= 0
+    assert band["upper_mw"] >= 0
 
 
 def test_error_quantiles_exclude_day_and_band_is_ordered() -> None:
@@ -185,6 +205,15 @@ def test_elexon_forecasts_filter_horizon_and_gate() -> None:
             "startTime": "2026-01-15T01:00:00Z",
             "publishTime": "2026-01-14T09:30:00Z",
             "generation": "not-a-number",
+        },
+        {
+            "publishTime": "2026-01-14T09:30:00Z",
+            "generation": 3_000,
+        },
+        {
+            "startTime": "2026-01-15T02:00:00Z",
+            "publishTime": "not-a-time",
+            "generation": 3_000,
         },
     ]
     client._get = lambda path, params: rows  # type: ignore[method-assign]

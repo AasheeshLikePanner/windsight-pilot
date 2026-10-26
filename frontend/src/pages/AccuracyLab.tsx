@@ -37,6 +37,7 @@ import {
   dateTime,
   gwh,
   gw,
+  gwTick,
   mw,
   pct,
   periodLabel,
@@ -80,63 +81,85 @@ export function AccuracyLab() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [accuracy, setAccuracy] = useState<Accuracy | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [indexLoading, setIndexLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetryable, setErrorRetryable] = useState(false);
   const [indexError, setIndexError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-    Promise.all([fetchMeta(), fetchDates()])
+    const controller = new AbortController();
+    Promise.all([fetchMeta(controller.signal), fetchDates(controller.signal)])
       .then(([metaData, dateRows]) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setMeta(metaData);
         setDates(dateRows);
         setIndexError(null);
-        setFrom(dateRows[0]?.date ?? "");
-        setTo(dateRows.at(-1)?.date ?? "");
+        setIndexLoading(false);
+        setLoading(dateRows.length > 0);
+        const first = dateRows[0]?.date ?? "";
+        const last = dateRows.at(-1)?.date ?? "";
+        setFrom((current) =>
+          dateRows.some((row) => row.date === current) ? current : first,
+        );
+        setTo((current) =>
+          dateRows.some((row) => row.date === current) ? current : last,
+        );
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
+        setIndexLoading(false);
         setIndexError(
           reason instanceof Error ? reason.message : "Could not load the data index.",
         );
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [reloadKey]);
 
   useEffect(() => {
-    if (!from || !to) return;
-    if (from > to) {
-      setError("The start date must be on or before the end date.");
+    if (!from || !to) {
+      setAccuracy(null);
+      setLoading(false);
+      setError(null);
       return;
     }
-    let cancelled = false;
+    if (from > to) {
+      setAccuracy(null);
+      setLoading(false);
+      setError("The start date must be on or before the end date.");
+      setErrorRetryable(false);
+      return;
+    }
+    const controller = new AbortController();
+    setAccuracy(null);
     setLoading(true);
     setError(null);
-    fetchAccuracy(from, to)
+    fetchAccuracy(from, to, controller.signal)
       .then((data) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setAccuracy(data);
         setLoading(false);
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setError(
           reason instanceof Error ? reason.message : "Could not load accuracy data.",
         );
+        setErrorRetryable(true);
         setLoading(false);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [from, to, reloadKey]);
 
   const summary = accuracy?.summary;
   const maxAxis = useMemo(
-    () => Math.ceil((accuracy?.max_axis_mw ?? 10_000) / 5_000) * 5_000,
+    () =>
+      Math.max(5_000, Math.ceil((accuracy?.max_axis_mw ?? 10_000) / 5_000) * 5_000),
     [accuracy],
   );
 
@@ -161,11 +184,13 @@ export function AccuracyLab() {
     {
       header: "Forecast",
       align: "right",
+      className: "hide-sm",
       render: (row) => mw(row.forecast_mw),
     },
     {
       header: "Actual",
       align: "right",
+      className: "hide-xs",
       render: (row) => mw(row.actual_mw),
     },
     {
@@ -201,6 +226,7 @@ export function AccuracyLab() {
     {
       header: "Bias",
       align: "right",
+      className: "hide-xs",
       render: (row) => (
         <span className={row.bias_mw >= 0 ? "num--pos" : "num--neg"}>
           {signedMw(row.bias_mw)}
@@ -216,6 +242,7 @@ export function AccuracyLab() {
     {
       header: "Within ±1 GW",
       align: "right",
+      className: "hide-sm",
       render: (row) => pct(row.within_1gw_pct),
     },
   ];
@@ -245,6 +272,7 @@ export function AccuracyLab() {
     {
       header: "nMAE",
       align: "right",
+      className: "hide-xs",
       render: (row) => pct(row.nmae_pct),
     },
   ];
@@ -336,11 +364,16 @@ export function AccuracyLab() {
       {error ? (
         <ErrorNotice
           message={error}
-          onRetry={() => setReloadKey((key) => key + 1)}
+          onRetry={
+            errorRetryable ? () => setReloadKey((key) => key + 1) : undefined
+          }
         />
       ) : null}
 
-      {loading && !accuracy ? (
+      {!accuracy &&
+      !error &&
+      !indexError &&
+      (indexLoading || loading) ? (
         <>
           <div className="kpi-grid">
             {Array.from({ length: 6 }, (_, index) => (
@@ -353,6 +386,18 @@ export function AccuracyLab() {
             <LoadingBlock lines={8} />
           </SectionCard>
         </>
+      ) : null}
+
+      {!accuracy &&
+      !error &&
+      !indexError &&
+      !indexLoading &&
+      !loading &&
+      dates.length === 0 ? (
+        <EmptyState
+          title="No cached Elexon data"
+          message="Rebuild the Elexon snapshot, then reload this page to review accuracy."
+        />
       ) : null}
 
       {accuracy && summary && summary.n > 0 ? (
@@ -412,7 +457,11 @@ export function AccuracyLab() {
               title="Daily error and bias"
               description="Mean absolute error by delivery day, with the signed bias overlaid. A positive bias is an over-forecast."
             >
-              <div className="chart chart--medium">
+              <div
+                className="chart chart--medium"
+                role="img"
+                aria-label="Daily mean absolute error bars with signed forecast bias over the selected range."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={accuracy.daily}
@@ -427,9 +476,7 @@ export function AccuracyLab() {
                       {...axisProps}
                     />
                     <YAxis
-                      tickFormatter={(value: number) =>
-                        `${Math.round(value / 1000)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip
@@ -477,7 +524,11 @@ export function AccuracyLab() {
               title="Forecast vs actual"
               description="Each dot is an hourly decision point. The diagonal is perfect foresight."
             >
-              <div className="chart chart--medium">
+              <div
+                className="chart chart--medium"
+                role="img"
+                aria-label="Scatter plot of hourly forecast wind against actual wind, with a diagonal perfect-foresight reference line."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ top: 8, right: 16, bottom: 0, left: -10 }}>
                     <CartesianGrid {...gridProps} />
@@ -486,9 +537,7 @@ export function AccuracyLab() {
                       dataKey="actual_mw"
                       name="Actual"
                       domain={[0, maxAxis]}
-                      tickFormatter={(value: number) =>
-                        `${Math.round(value / 1000)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <YAxis
@@ -496,9 +545,7 @@ export function AccuracyLab() {
                       dataKey="forecast_mw"
                       name="Forecast"
                       domain={[0, maxAxis]}
-                      tickFormatter={(value: number) =>
-                        `${Math.round(value / 1000)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip
@@ -538,7 +585,11 @@ export function AccuracyLab() {
               title="Error distribution"
               description="How often the forecast missed by each width, and in which direction."
             >
-              <div className="chart chart--small">
+              <div
+                className="chart chart--small"
+                role="img"
+                aria-label="Histogram of signed hourly forecast errors, split into negative shortfall bins and positive over-forecast bins."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={distributionRows}
@@ -594,7 +645,11 @@ export function AccuracyLab() {
               title="Error by hour of day"
               description="Mean absolute error for each delivery hour across the selected range."
             >
-              <div className="chart chart--small">
+              <div
+                className="chart chart--small"
+                role="img"
+                aria-label="Bar chart of mean absolute forecast error by delivery hour of day."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={accuracy.by_hour}
@@ -603,9 +658,7 @@ export function AccuracyLab() {
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={26} {...axisProps} />
                     <YAxis
-                      tickFormatter={(value: number) =>
-                        `${(value / 1000).toFixed(1)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip
@@ -637,7 +690,11 @@ export function AccuracyLab() {
               title="Accuracy by lead time"
               description="Every stored vintage, bucketed by how far ahead the delivery hour was. This is the model's horizon curve."
             >
-              <div className="chart chart--small">
+              <div
+                className="chart chart--small"
+                role="img"
+                aria-label="Bar chart of mean absolute error and line of bias across forecast lead-time buckets."
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={accuracy.by_lead_time}
@@ -646,9 +703,7 @@ export function AccuracyLab() {
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="lead_time" {...axisProps} />
                     <YAxis
-                      tickFormatter={(value: number) =>
-                        `${(value / 1000).toFixed(1)} GW`
-                      }
+                      tickFormatter={(value: number) => gwTick(value)}
                       {...axisProps}
                     />
                     <Tooltip

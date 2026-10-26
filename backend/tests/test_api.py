@@ -18,6 +18,13 @@ def client(tmp_path, monkeypatch):
     store = Store(db_path)
     try:
         seed_store(store, DAYS)
+        run_id = store.start_ingest_run()
+        store.finish_ingest_run(
+            run_id,
+            actual_count=96,
+            forecast_count=48,
+            status="ok",
+        )
     finally:
         store.close()
     monkeypatch.setattr("app.api.DB_PATH", db_path)
@@ -38,6 +45,9 @@ def test_health_and_meta(client: TestClient) -> None:
     assert body["data_ready"] is True
     assert body["gate_closure"]["local_time"] == "11:00"
     assert body["counts"]["forecasts"] == 48
+    assert body["last_ingest"]["status"] == "ok"
+    assert body["last_ingest"]["finished_at"] is not None
+    assert "completed_at" not in body["last_ingest"]
 
 
 def test_dates_defaults_to_last_day(client: TestClient) -> None:
@@ -92,3 +102,21 @@ def test_invalid_requests_are_rejected(client: TestClient) -> None:
         ).status_code
         == 400
     )
+
+
+def test_requests_outside_the_snapshot_are_rejected(client: TestClient) -> None:
+    for params in (
+        {"date": "0001-01-01"},
+        {"date": "9999-12-31"},
+    ):
+        response = client.get("/api/decision", params=params)
+        assert response.status_code == 400
+        assert "between" in response.json()["detail"]
+
+    for params in (
+        {"from": "0001-01-01", "to": "9999-12-31"},
+        {"from": "2026-01-01", "to": "2026-02-01"},
+    ):
+        response = client.get("/api/accuracy", params=params)
+        assert response.status_code == 400
+        assert "between" in response.json()["detail"]

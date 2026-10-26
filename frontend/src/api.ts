@@ -2,9 +2,10 @@ import type { Accuracy, DateCoverage, Decision, Meta } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { Accept: "application/json" },
+    signal,
   });
   if (!response.ok) {
     let detail = `Request failed (${response.status})`;
@@ -19,22 +20,27 @@ async function request<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function fetchMeta(): Promise<Meta> {
-  return request<Meta>("/api/meta");
+export function fetchMeta(signal?: AbortSignal): Promise<Meta> {
+  return request<Meta>("/api/meta", signal);
 }
 
-export async function fetchDates(): Promise<DateCoverage[]> {
+export async function fetchDates(signal?: AbortSignal): Promise<DateCoverage[]> {
   const body = await request<{ dates: DateCoverage[]; default: string | null }>(
     "/api/dates",
+    signal,
   );
   return body.dates;
 }
 
-export function fetchDecision(date: string): Promise<Decision> {
-  return request<Decision>(`/api/decision?date=${encodeURIComponent(date)}`);
+export function fetchDecision(date: string, signal?: AbortSignal): Promise<Decision> {
+  return request<Decision>(`/api/decision?date=${encodeURIComponent(date)}`, signal);
 }
 
-export function fetchAccuracy(from: string, to: string): Promise<Accuracy> {
+export function fetchAccuracy(
+  from: string,
+  to: string,
+  signal?: AbortSignal,
+): Promise<Accuracy> {
   const params = new URLSearchParams({ from, to });
-  return request<Accuracy>(`/api/accuracy?${params.toString()}`);
+  return request<Accuracy>(`/api/accuracy?${params.toString()}`, signal);
 }

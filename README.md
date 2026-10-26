@@ -67,7 +67,7 @@ The SQLite snapshot is committed at `backend/data/windsight.db`, so the app runs
 
 - `FUELHH` requires `settlementDateFrom` / `settlementDateTo`. Generic `from` / `to` parameters are ignored by that endpoint.
 - `WINDFOR` returns a rolling forecast horizon, so the ingestion adapter filters delivery `startTime` to the requested day after applying the publish-time window.
-- Forecasts are hourly and actuals are half-hourly. The UI shows 48 half-hour periods by repeating each hourly forecast across its two settlement periods, but **all summary metrics use the 24 hourly decision points** (the actual is the mean of the two half-hours).
+- Forecasts are hourly and actuals are half-hourly. The UI shows 48 half-hour periods by repeating each hourly forecast across its two settlement periods, but **all summary metrics use the 24 hourly decision points** (the actual is the mean of the two half-hours). Incomplete half-hour pairs are omitted rather than treated as a full-hour average, so they surface as lower coverage.
 - Gate closure is an explicit assumption. A production version should read the actual auction calendar.
 
 Source documentation:
@@ -142,6 +142,8 @@ Then restart the backend. `app.main` mounts `frontend/dist` and falls back to `i
 | `GET` | `/api/dates` | Delivery dates with actual/forecast coverage |
 | `GET` | `/api/decision?date=YYYY-MM-DD` | Pre-gate forecast, actuals, band, summary |
 | `GET` | `/api/accuracy?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range metrics and breakdowns |
+
+Dates outside the committed snapshot (`2026-01-01` to `2026-01-31`) return `400` rather than an empty or unbounded response.
 
 Examples:
 
@@ -226,7 +228,7 @@ ruff check app tests
 ruff format --check app tests
 ```
 
-Current suite: **15 tests**, covering gate closure, vintage selection, half-hour aggregation, metric values, quantiles, histogram, store idempotence, Elexon filtering, the health/meta/dates/decision/accuracy endpoints, and invalid input.
+Current suite: **18 tests**, covering gate closure, vintage selection, half-hour aggregation (including incomplete pairs), metric values, quantiles, histogram, store idempotence, Elexon filtering, the health/meta/dates/decision/accuracy endpoints, invalid input, snapshot date bounds, and last-ingest metadata.
 
 Frontend:
 

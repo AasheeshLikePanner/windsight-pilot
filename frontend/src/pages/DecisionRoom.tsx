@@ -1,0 +1,577 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  CalendarDays,
+  Clock3,
+  Gauge,
+  ShieldAlert,
+  Target,
+  Wind,
+} from "lucide-react";
+import {
+  Area,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import { fetchDates, fetchDecision, fetchMeta } from "../api";
+import { axisProps, COLORS, gridProps, tooltipStyle } from "../chartTheme";
+import { Badge } from "../components/Badge";
+import { DataTable, type Column } from "../components/DataTable";
+import { DateField } from "../components/DateField";
+import { KpiCard } from "../components/KpiCard";
+import { SectionCard } from "../components/SectionCard";
+import { EmptyState, ErrorNotice, LoadingBlock } from "../components/States";
+import {
+  clockTime,
+  dateLabel,
+  dateTime,
+  gwh,
+  gw,
+  longDate,
+  mw,
+  pct,
+  periodLabel,
+  signedMw,
+} from "../format";
+import type { DateCoverage, Decision, Meta, Period } from "../types";
+
+type ChartRow = {
+  label: string;
+  forecast: number | null;
+  actual: number | null;
+  error: number | null;
+  band: [number, number] | null;
+  shortfallBuffer: number | null;
+  leadTime: number | null;
+};
+
+function toneForBias(bias: number): "good" | "warn" {
+  return Math.abs(bias) <= 1_000 ? "good" : "warn";
+}
+
+function toneForError(mae: number): "good" | "warn" | "bad" {
+  if (mae <= 1_200) return "good";
+  if (mae <= 2_200) return "warn";
+  return "bad";
+}
+
+function toneForCoverage(coverage: number): "good" | "warn" | "bad" {
+  if (coverage >= 100) return "good";
+  if (coverage >= 90) return "warn";
+  return "bad";
+}
+
+export function DecisionRoom() {
+  const [meta, setMeta] = useState<Meta | null>(null);
+  const [dates, setDates] = useState<DateCoverage[]>([]);
+  const [selected, setSelected] = useState("");
+  const [decision, setDecision] = useState<Decision | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchMeta(), fetchDates()])
+      .then(([metaData, dateRows]) => {
+        if (cancelled) return;
+        setMeta(metaData);
+        setDates(dateRows);
+        setIndexError(null);
+        setSelected((current) => {
+          if (current) return current;
+          return dateRows.at(-1)?.date ?? "";
+        });
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setIndexError(
+          reason instanceof Error ? reason.message : "Could not load the data index.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchDecision(selected)
+      .then((data) => {
+        if (cancelled) return;
+        setDecision(data);
+        setLoading(false);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setError(
+          reason instanceof Error ? reason.message : "Could not load this decision.",
+        );
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, reloadKey]);
+
+  const chartRows = useMemo<ChartRow[]>(() => {
+    if (!decision) return [];
+    return decision.periods.map((period) => ({
+      label: periodLabel(period.start_time),
+      forecast: period.forecast_mw,
+      actual: period.actual_mw,
+      error: period.error_mw,
+      band:
+        period.lower_mw !== null && period.upper_mw !== null
+          ? [period.lower_mw, period.upper_mw]
+          : null,
+      shortfallBuffer: period.shortfall_buffer_mw,
+      leadTime: period.lead_time_hours,
+    }));
+  }, [decision]);
+
+  const errorRows = useMemo(
+    () =>
+      chartRows.filter(
+        (row): row is ChartRow & { error: number } => row.error !== null,
+      ),
+    [chartRows],
+  );
+
+  const worstRows = useMemo(() => {
+    if (!decision) return [];
+    return [...decision.periods]
+      .filter((period) => period.abs_error_mw !== null)
+      .sort((a, b) => (b.abs_error_mw ?? 0) - (a.abs_error_mw ?? 0))
+      .slice(0, 8);
+  }, [decision]);
+
+  const summary = decision?.summary;
+  const coverage = summary?.coverage_pct ?? 0;
+  const widestBuffer = decision
+    ? Math.max(
+        0,
+        ...decision.periods.map((period) => period.shortfall_buffer_mw ?? 0),
+      )
+    : 0;
+  const overForecast = (summary?.bias_mw ?? 0) >= 0;
+
+  const worstColumns: Column<Period>[] = [
+    {
+      header: "Half-hour",
+      render: (row) => (
+        <span className="mono">{periodLabel(row.start_time)}</span>
+      ),
+    },
+    {
+      header: "Forecast",
+      align: "right",
+      render: (row) => mw(row.forecast_mw),
+    },
+    {
+      header: "Actual",
+      align: "right",
+      render: (row) => mw(row.actual_mw),
+    },
+    {
+      header: "Error",
+      align: "right",
+      render: (row) => (
+        <span
+          className={
+            row.error_mw === null
+              ? "muted"
+              : row.error_mw > 0
+                ? "num--pos"
+                : "num--neg"
+          }
+        >
+          {signedMw(row.error_mw)}
+        </span>
+      ),
+    },
+    {
+      header: "Lead",
+      align: "right",
+      className: "hide-sm",
+      render: (row) =>
+        row.lead_time_hours === null ? "—" : `${row.lead_time_hours.toFixed(1)} h`,
+    },
+  ];
+
+  const dateOptions = dates.map((row) => ({
+    value: row.date,
+    label: `${dateLabel(row.date)} · ${row.actual_rows}/48 actuals`,
+  }));
+
+  return (
+    <>
+      <header className="page-header">
+        <div>
+          <div className="eyebrow">Decision room</div>
+          <h1>
+            {decision ? longDate(decision.date) : "Day-ahead wind decision"}
+          </h1>
+          <p className="page-subtitle">
+            The picture a trading or operations desk would have seen at gate
+            closure: the latest pre-gate wind forecast, how the day actually
+            landed, and where the shortfall risk sat.
+          </p>
+        </div>
+        <div className="page-actions">
+          <DateField
+            id="decision-date"
+            label="Delivery day"
+            value={selected}
+            options={dateOptions}
+            onChange={setSelected}
+            disabled={dateOptions.length === 0}
+          />
+        </div>
+      </header>
+
+      {indexError ? (
+        <ErrorNotice
+          message={indexError}
+          onRetry={() => setReloadKey((key) => key + 1)}
+        />
+      ) : null}
+
+      {meta && !meta.data_ready ? (
+        <EmptyState
+          title="No cached Elexon data"
+          message="Run the ingestion command to build the SQLite snapshot, then reload this page."
+        />
+      ) : null}
+
+      {error ? (
+        <ErrorNotice
+          message={error}
+          onRetry={() => setReloadKey((key) => key + 1)}
+        />
+      ) : null}
+
+      {loading && !decision ? (
+        <>
+          <div className="kpi-grid">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div className="kpi" key={index}>
+                <LoadingBlock lines={2} />
+              </div>
+            ))}
+          </div>
+          <SectionCard title="Loading the decision">
+            <LoadingBlock lines={8} />
+          </SectionCard>
+        </>
+      ) : null}
+
+      {decision && summary && summary.n > 0 ? (
+        <>
+          <div className="kpi-grid">
+            <KpiCard
+              label="Forecast energy"
+              value={gwh(summary.forecast_energy_gwh)}
+              hint={`${summary.n} hourly decision points`}
+              icon={<Wind size={16} />}
+            />
+            <KpiCard
+              label="Actual energy"
+              value={gwh(summary.actual_energy_gwh)}
+              hint="Elexon FUELHH half-hours"
+              icon={<Activity size={16} />}
+            />
+            <KpiCard
+              label="Forecast bias"
+              value={signedMw(summary.bias_mw)}
+              hint={overForecast ? "Over-forecast on average" : "Under-forecast on average"}
+              tone={toneForBias(summary.bias_mw)}
+              icon={<Gauge size={16} />}
+            />
+            <KpiCard
+              label="Mean absolute error"
+              value={mw(summary.mae_mw)}
+              hint={`${pct(summary.nmae_pct)} of mean actual`}
+              tone={toneForError(summary.mae_mw)}
+              icon={<Target size={16} />}
+            />
+            <KpiCard
+              label="Within ±1 GW"
+              value={pct(summary.within_1gw_pct)}
+              hint="Share of hourly points"
+              tone={summary.within_1gw_pct >= 50 ? "good" : "warn"}
+              icon={<ShieldAlert size={16} />}
+            />
+            <KpiCard
+              label="Data coverage"
+              value={pct(coverage)}
+              hint={`${decision.data_quality.actual_periods}/48 actuals · ${decision.data_quality.forecast_hours} forecast hours`}
+              tone={toneForCoverage(coverage)}
+              icon={<CalendarDays size={16} />}
+            />
+          </div>
+
+          <div className="grid-2">
+            <SectionCard
+              eyebrow="Delivery day"
+              title="Actual vs pre-gate forecast"
+              description="Half-hourly actuals against the latest WINDFOR vintage published before 11:00 UK time on D-1. The shaded band is the empirical P10–P90 error range for the forecast level."
+              actions={
+                <Badge tone={overForecast ? "warn" : "info"} dot>
+                  {overForecast ? "Over-forecast" : "Under-forecast"}
+                </Badge>
+              }
+            >
+              <div className="chart chart--main">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={chartRows}
+                    margin={{ top: 8, right: 10, bottom: 0, left: -10 }}
+                  >
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={28} {...axisProps} />
+                    <YAxis
+                      domain={[0, "auto"]}
+                      tickFormatter={(value: number) =>
+                        `${Math.round(value / 1000)} GW`
+                      }
+                      {...axisProps}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      labelStyle={{ color: "#94a3b8" }}
+                      itemStyle={{ color: "#e2e8f0" }}
+                      labelFormatter={(label) => `${label} UTC`}
+                      formatter={(value, name) => {
+                        const numeric = Array.isArray(value) ? null : Number(value);
+                        return [
+                          numeric === null || Number.isNaN(numeric)
+                            ? "—"
+                            : mw(numeric),
+                          String(name),
+                        ];
+                      }}
+                    />
+                    <Legend
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: 12, color: "#94a3b8" }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="band"
+                      name="P10–P90 band"
+                      stroke="none"
+                      fill={COLORS.band}
+                      fillOpacity={0.12}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="actual"
+                      name="Actual"
+                      stroke={COLORS.actual}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="forecast"
+                      name="Forecast at gate"
+                      stroke={COLORS.forecast}
+                      strokeWidth={2.2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="chart-note">
+                Forecast values repeat across the two half-hours of each hour
+                because WINDFOR is hourly. The summary metrics use the 24 hourly
+                decision points; the chart shows the 48 settlement periods.
+              </p>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="At the cut-off"
+              title="Decision brief"
+              description="What was knowable before the day-ahead gate closed."
+            >
+              <div className="brief">
+                <div className="brief__row">
+                  <span className="brief__label">Gate closure</span>
+                  <span className="brief__value">
+                    {dateTime(decision.gate_closure)}
+                  </span>
+                </div>
+                <div className="brief__row">
+                  <span className="brief__label">Vintage used</span>
+                  <span className="brief__value">
+                    {dateTime(decision.vintage.publish_time)}
+                  </span>
+                </div>
+                <div className="brief__row">
+                  <span className="brief__label">Lead time</span>
+                  <span className="brief__value">
+                    {decision.vintage.lead_time_min_hours !== null &&
+                    decision.vintage.lead_time_max_hours !== null
+                      ? `${decision.vintage.lead_time_min_hours.toFixed(1)}–${decision.vintage.lead_time_max_hours.toFixed(1)} h`
+                      : "—"}
+                  </span>
+                </div>
+                <div className="brief__row">
+                  <span className="brief__label">Forecast hours</span>
+                  <span className="brief__value">
+                    {decision.data_quality.forecast_hours}/24
+                  </span>
+                </div>
+                <div className="brief__row">
+                  <span className="brief__label">Actual periods</span>
+                  <span className="brief__value">
+                    {decision.data_quality.actual_periods}/48
+                  </span>
+                </div>
+                <div className="brief__row">
+                  <span className="brief__label">Widest half-hour buffer</span>
+                  <span className="brief__value">{mw(widestBuffer)}</span>
+                </div>
+              </div>
+
+              <div className={`callout${overForecast ? "" : " callout--info"}`}>
+                <strong>{overForecast ? "Reserve watch." : "Surplus watch."}</strong>{" "}
+                {overForecast
+                  ? `The forecast ran ${gw(summary.bias_mw)} above actual on average. The P90 shortfall buffer for the day was ${mw(summary.p90_shortfall_mw)}; that is the reserve this forecast would have justified.`
+                  : `The forecast ran ${gw(Math.abs(summary.bias_mw))} below actual on average. The desk would have been long relative to the wind outturn; the P90 shortfall buffer was ${mw(summary.p90_shortfall_mw)}.`}
+              </div>
+              <div className="callout callout--info">
+                <strong>Why this matters.</strong> Wind shortfalls have to be
+                covered closer to delivery, often at a worse price. The buffer
+                turns an error distribution into a reserve number a desk can
+                argue about.
+              </div>
+            </SectionCard>
+          </div>
+
+          <div className="grid-2--even grid-2">
+            <SectionCard
+              title="Half-hour error"
+              description="Forecast minus actual. Positive values are over-forecasts; negative values are shortfalls."
+              actions={
+                <Badge tone="neutral">
+                  <Clock3 size={12} /> UTC
+                </Badge>
+              }
+            >
+              <div className="chart chart--small">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={errorRows}
+                    margin={{ top: 8, right: 10, bottom: 0, left: -10 }}
+                  >
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="label" interval="preserveStartEnd" minTickGap={28} {...axisProps} />
+                    <YAxis
+                      tickFormatter={(value: number) =>
+                        `${Math.round(value / 1000)} GW`
+                      }
+                      {...axisProps}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      labelStyle={{ color: "#94a3b8" }}
+                      itemStyle={{ color: "#e2e8f0" }}
+                      labelFormatter={(label) => `${label} UTC`}
+                      formatter={(value) => {
+                        const numeric = Number(value);
+                        return [
+                          Number.isNaN(numeric) ? "—" : signedMw(numeric),
+                          "Forecast error",
+                        ];
+                      }}
+                    />
+                    <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+                    <Bar dataKey="error" name="Forecast error" isAnimationActive={false}>
+                      {errorRows.map((row) => (
+                        <Cell
+                          key={row.label}
+                          fill={row.error >= 0 ? COLORS.error : COLORS.surplus}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Largest misses"
+              description="The half-hours that would have hurt the most operationally."
+            >
+              <DataTable
+                columns={worstColumns}
+                rows={worstRows}
+                rowKey={(row) => row.start_time}
+                empty="No matched forecast and actual periods for this day."
+              />
+            </SectionCard>
+          </div>
+
+          <SectionCard
+            eyebrow="Method"
+            title="How to read this view"
+            description="The guardrails behind the numbers."
+          >
+            <div className="stack">
+              {decision.notes.map((note) => (
+                <div className="callout callout--info" key={note}>
+                  {note}
+                </div>
+              ))}
+              <p className="chart-note">
+                Latest published vintage used in this view:{" "}
+                {clockTime(decision.latest_publish_time)}. Forecast window:
+                {" "}
+                {decision.data_quality.forecast_hours} hourly values. Actuals:
+                {" "}
+                {decision.data_quality.actual_periods} half-hour values.
+              </p>
+            </div>
+          </SectionCard>
+        </>
+      ) : null}
+
+      {decision && summary && summary.n === 0 ? (
+        <EmptyState
+          title="No decision data for this day"
+          message="The cached snapshot does not have a matched forecast and actual for this date yet."
+        />
+      ) : null}
+
+      <p className="page-footer">
+        Snapshot built from Elexon BMRS.
+        {decision ? ` ${dateLabel(decision.date)}.` : ""}
+        {meta?.last_ingest?.finished_at
+          ? ` Cache refreshed ${dateTime(meta.last_ingest.finished_at)}.`
+          : ""}{" "}
+        Data source: FUELHH (actuals) and WINDFOR (forecasts).
+      </p>
+    </>
+  );
+}

@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-10-26T05:32:27Z",
+  "start": "2026-01-01",
+  "end": "2026-01-31",
+  "days": 31,
+  "actual_rows": 1488,
+  "forecast_rows": 8432,
+  "db": "backend/data/windsight.db",
+  "db_size_mb": 1.32,
+  "status": "ok",
+  "errors": [],
+  "gate_closure_rule": "11:00 Europe/London, day before delivery",
+  "datasets": {
+    "actuals": "FUELHH",
+    "forecasts": "WINDFOR",
+    "sources": [
+      "https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/FUELHH/stream",
+      "https://bmrs.elexon.co.uk/api-documentation/endpoint/datasets/WINDFOR/stream"
+    ]
+  },
+  "last_run": {
+    "id": 1,
+    "started_at": "2026-10-26T05:32:10Z",
+    "completed_at": "2026-10-26T05:32:27Z",
+    "actual_count": 1488,
+    "forecast_count": 8432,
+    "status": "ok",
+    "notes": null
+  }
+}

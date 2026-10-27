@@ -23,7 +23,7 @@
 - [x] Empty-snapshot and API-failure states were checked; retries recover.
 - [x] Out-of-range API dates return `400`.
 - [x] Desktop and mobile layouts checked.
-- [x] `pytest -q` (18 passed) and `ruff check app tests` pass.
+- [x] `pytest -q` (21 passed) and `ruff check app tests` pass.
 - [x] `npm run build` passes.
 
 ## Deployment

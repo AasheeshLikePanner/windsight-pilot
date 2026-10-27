@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,6 +27,38 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def production_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), geolocation=(), microphone=()"
+    )
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers.setdefault(
+            "Cache-Control", "public, max-age=31536000, immutable"
+        )
+    elif path.startswith("/fonts/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=604800")
+    elif path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    elif response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
+@app.exception_handler(sqlite3.DatabaseError)
+async def snapshot_database_error(_: Request, __: sqlite3.DatabaseError):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "The snapshot database is unavailable."},
+    )
+
 
 app.include_router(router)
 

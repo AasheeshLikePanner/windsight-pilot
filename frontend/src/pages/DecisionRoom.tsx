@@ -24,14 +24,25 @@ import {
   YAxis,
 } from "recharts";
 
-import { fetchDates, fetchDecision, fetchMeta } from "../api";
-import { axisProps, COLORS, gridProps, tooltipStyle } from "../chartTheme";
+import { fetchDecision } from "../api";
+import {
+  axisProps,
+  COLORS,
+  gridProps,
+  referenceLineStyle,
+  tooltipItemStyle,
+  tooltipLabelStyle,
+  tooltipStyle,
+  tooltipWrapperStyle,
+} from "../chartTheme";
 import { Badge } from "../components/Badge";
 import { DataTable, type Column } from "../components/DataTable";
 import { DateField } from "../components/DateField";
 import { KpiCard } from "../components/KpiCard";
+import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { EmptyState, ErrorNotice, LoadingBlock } from "../components/States";
+import { errorMessage } from "../errors";
 import {
   clockTime,
   dateLabel,
@@ -45,7 +56,8 @@ import {
   periodLabel,
   signedMw,
 } from "../format";
-import type { DateCoverage, Decision, Meta, Period } from "../types";
+import { useSnapshotIndex } from "../hooks/useSnapshotIndex";
+import type { Decision, Period } from "../types";
 
 type ChartRow = {
   label: string;
@@ -74,43 +86,26 @@ function toneForCoverage(coverage: number): "good" | "warn" | "bad" {
 }
 
 export function DecisionRoom() {
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [dates, setDates] = useState<DateCoverage[]>([]);
+  const {
+    meta,
+    dates,
+    loading: indexLoading,
+    error: indexError,
+    retry: retryIndex,
+  } = useSnapshotIndex();
   const [selected, setSelected] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [indexLoading, setIndexLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [indexError, setIndexError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([fetchMeta(controller.signal), fetchDates(controller.signal)])
-      .then(([metaData, dateRows]) => {
-        if (controller.signal.aborted) return;
-        setMeta(metaData);
-        setDates(dateRows);
-        setIndexError(null);
-        setIndexLoading(false);
-        setLoading(dateRows.length > 0);
-        setSelected((current) =>
-          dateRows.some((row) => row.date === current)
-            ? current
-            : (dateRows.at(-1)?.date ?? ""),
-        );
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setIndexLoading(false);
-        setIndexError(
-          reason instanceof Error ? reason.message : "Could not load the data index.",
-        );
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [reloadKey]);
+    setSelected((current) =>
+      dates.some((row) => row.date === current)
+        ? current
+        : (dates.at(-1)?.date ?? ""),
+    );
+  }, [dates]);
 
   useEffect(() => {
     if (!selected) {
@@ -131,9 +126,7 @@ export function DecisionRoom() {
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error ? reason.message : "Could not load this decision.",
-        );
+        setError(errorMessage(reason, "Could not load this decision."));
         setLoading(false);
       });
     return () => {
@@ -229,24 +222,16 @@ export function DecisionRoom() {
 
   const dateOptions = dates.map((row) => ({
     value: row.date,
-    label: `${dateLabel(row.date)} · ${row.actual_rows}/48 actuals`,
+    label: `${dateLabel(row.date)}, ${row.actual_rows}/48 actuals`,
   }));
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <div className="eyebrow">Decision room</div>
-          <h1>
-            {decision ? longDate(decision.date) : "Day-ahead wind decision"}
-          </h1>
-          <p className="page-subtitle">
-            The picture a trading or operations desk would have seen at gate
-            closure: the latest pre-gate wind forecast, how the day actually
-            landed, and where the shortfall risk sat.
-          </p>
-        </div>
-        <div className="page-actions">
+      <PageHeader
+        eyebrow="Decision room"
+        title={decision ? longDate(decision.date) : "Day-ahead wind decision"}
+        subtitle="The picture a trading or operations desk would have seen at gate closure: the latest pre-gate wind forecast, how the day actually landed, and where the shortfall risk sat."
+        actions={
           <DateField
             id="decision-date"
             label="Delivery day"
@@ -255,14 +240,11 @@ export function DecisionRoom() {
             onChange={setSelected}
             disabled={dateOptions.length === 0}
           />
-        </div>
-      </header>
+        }
+      />
 
       {indexError ? (
-        <ErrorNotice
-          message={indexError}
-          onRetry={() => setReloadKey((key) => key + 1)}
-        />
+        <ErrorNotice message={indexError} onRetry={retryIndex} />
       ) : null}
 
       {error ? (
@@ -377,8 +359,8 @@ export function DecisionRoom() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       labelFormatter={(label) => `${label} UTC`}
                       formatter={(value, name) => {
                         const numeric = Array.isArray(value) ? null : Number(value);
@@ -393,7 +375,7 @@ export function DecisionRoom() {
                     <Legend
                       iconType="circle"
                       iconSize={8}
-                      wrapperStyle={{ fontSize: 12, color: "#94a3b8" }}
+                      wrapperStyle={tooltipWrapperStyle}
                     />
                     <Area
                       type="monotone"
@@ -520,8 +502,8 @@ export function DecisionRoom() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       labelFormatter={(label) => `${label} UTC`}
                       formatter={(value) => {
                         const numeric = Number(value);
@@ -531,7 +513,7 @@ export function DecisionRoom() {
                         ];
                       }}
                     />
-                    <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+                    <ReferenceLine y={0} {...referenceLineStyle} />
                     <Bar dataKey="error" name="Forecast error" isAnimationActive={false}>
                       {errorRows.map((row) => (
                         <Cell

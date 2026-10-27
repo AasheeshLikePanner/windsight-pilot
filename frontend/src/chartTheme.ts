@@ -1,25 +1,33 @@
 import type { CSSProperties } from "react";
 
 export const COLORS = {
-  actual: "#f8fafc",
-  forecast: "#f5b942",
-  band: "#2dd4bf",
+  actual: "#f2f2f2",
+  forecast: "#fbbf24",
+  band: "#5eead4",
   error: "#f87171",
   shortfall: "#fb923c",
-  surplus: "#38bdf8",
-  grid: "#1e2b45",
-  axis: "#8493ad",
-  panel: "#0f1a2d",
+  surplus: "#60a5fa",
+  grid: "#2a2a2a",
+  axis: "#8a8a8a",
+  panel: "#1a1a1a",
 };
 
 export const tooltipStyle: CSSProperties = {
-  backgroundColor: "#0d1625",
-  border: "1px solid #24324a",
-  borderRadius: 10,
-  color: "#e2e8f0",
-  fontSize: 12,
-  padding: "10px 12px",
+  backgroundColor: "#1e1e1e",
+  border: "1px solid #383838",
+  borderRadius: 4,
+  color: "#f2f2f2",
+  fontSize: 11.5,
+  padding: "9px 11px",
 };
+
+export const tooltipLabelStyle: CSSProperties = { color: COLORS.axis };
+export const tooltipItemStyle: CSSProperties = { color: COLORS.actual };
+export const tooltipWrapperStyle: CSSProperties = {
+  fontSize: 12,
+  color: COLORS.axis,
+};
+export const referenceLineStyle = { stroke: "#5a5a5a", strokeWidth: 1 };
 
 export const axisProps = {
   stroke: COLORS.axis,

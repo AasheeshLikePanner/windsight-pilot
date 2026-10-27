@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
-  CalendarRange,
   Crosshair,
   Gauge,
   Percent,
@@ -25,13 +24,24 @@ import {
   YAxis,
 } from "recharts";
 
-import { fetchAccuracy, fetchDates, fetchMeta } from "../api";
-import { axisProps, COLORS, gridProps, tooltipStyle } from "../chartTheme";
+import { fetchAccuracy } from "../api";
+import {
+  axisProps,
+  COLORS,
+  gridProps,
+  referenceLineStyle,
+  tooltipItemStyle,
+  tooltipLabelStyle,
+  tooltipStyle,
+  tooltipWrapperStyle,
+} from "../chartTheme";
 import { DataTable, type Column } from "../components/DataTable";
 import { DateField } from "../components/DateField";
 import { KpiCard } from "../components/KpiCard";
+import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { EmptyState, ErrorNotice, LoadingBlock } from "../components/States";
+import { errorMessage } from "../errors";
 import {
   dateLabel,
   dateTime,
@@ -44,14 +54,8 @@ import {
   rangeLabel,
   signedMw,
 } from "../format";
-import type {
-  Accuracy,
-  DateCoverage,
-  LeadRow,
-  LevelRow,
-  Meta,
-  WorstRow,
-} from "../types";
+import { useSnapshotIndex } from "../hooks/useSnapshotIndex";
+import type { Accuracy, LeadRow, LevelRow, WorstRow } from "../types";
 
 function toneForMae(mae: number): "good" | "warn" | "bad" {
   if (mae <= 1_200) return "good";
@@ -76,48 +80,36 @@ function shortBin(label: string): string {
 }
 
 export function AccuracyLab() {
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [dates, setDates] = useState<DateCoverage[]>([]);
+  const {
+    meta,
+    dates,
+    loading: indexLoading,
+    error: indexError,
+    retry: retryIndex,
+  } = useSnapshotIndex();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [accuracy, setAccuracy] = useState<Accuracy | null>(null);
-  const [indexLoading, setIndexLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorRetryable, setErrorRetryable] = useState(false);
-  const [indexError, setIndexError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([fetchMeta(controller.signal), fetchDates(controller.signal)])
-      .then(([metaData, dateRows]) => {
-        if (controller.signal.aborted) return;
-        setMeta(metaData);
-        setDates(dateRows);
-        setIndexError(null);
-        setIndexLoading(false);
-        setLoading(dateRows.length > 0);
-        const first = dateRows[0]?.date ?? "";
-        const last = dateRows.at(-1)?.date ?? "";
-        setFrom((current) =>
-          dateRows.some((row) => row.date === current) ? current : first,
-        );
-        setTo((current) =>
-          dateRows.some((row) => row.date === current) ? current : last,
-        );
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setIndexLoading(false);
-        setIndexError(
-          reason instanceof Error ? reason.message : "Could not load the data index.",
-        );
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [reloadKey]);
+    if (dates.length === 0) {
+      setFrom("");
+      setTo("");
+      return;
+    }
+    const first = dates[0].date;
+    const last = dates[dates.length - 1].date;
+    setFrom((current) =>
+      dates.some((row) => row.date === current) ? current : first,
+    );
+    setTo((current) =>
+      dates.some((row) => row.date === current) ? current : last,
+    );
+  }, [dates]);
 
   useEffect(() => {
     if (!from || !to) {
@@ -134,7 +126,6 @@ export function AccuracyLab() {
       return;
     }
     const controller = new AbortController();
-    setAccuracy(null);
     setLoading(true);
     setError(null);
     fetchAccuracy(from, to, controller.signal)
@@ -145,9 +136,8 @@ export function AccuracyLab() {
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error ? reason.message : "Could not load accuracy data.",
-        );
+        setAccuracy(null);
+        setError(errorMessage(reason, "Could not load accuracy data."));
         setErrorRetryable(true);
         setLoading(false);
       });
@@ -302,63 +292,63 @@ export function AccuracyLab() {
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <div className="eyebrow">Accuracy lab</div>
-          <h1>Where the forecast earns its keep</h1>
-          <p className="page-subtitle">
-            A month-long review of the pre-gate wind forecast. The headline is
-            not one error number; it is how the error changes with time of day,
-            forecast level, and lead time.
-          </p>
-        </div>
-        <div className="page-actions">
-          <DateField
-            id="accuracy-from"
-            label="From"
-            value={from}
-            options={dateOptions}
-            onChange={setFrom}
-            disabled={dateOptions.length === 0}
-          />
-          <DateField
-            id="accuracy-to"
-            label="To"
-            value={to}
-            options={dateOptions}
-            onChange={setTo}
-            disabled={dateOptions.length === 0}
-          />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Accuracy lab"
+        title="Where the forecast earns its keep"
+        subtitle="A month-long review of the pre-gate wind forecast. The headline is not one error number; it is how the error changes with time of day, forecast level, and lead time."
+        actions={
+          <>
+            <DateField
+              id="accuracy-from"
+              label="From"
+              value={from}
+              options={dateOptions}
+              onChange={setFrom}
+              disabled={dateOptions.length === 0}
+            />
+            <DateField
+              id="accuracy-to"
+              label="To"
+              value={to}
+              options={dateOptions}
+              onChange={setTo}
+              disabled={dateOptions.length === 0}
+            />
+          </>
+        }
+      />
 
       {quickRanges.length ? (
-        <div className="range-buttons" style={{ marginBottom: 18 }}>
-          {quickRanges.map((range) => {
-            const active = from === range.start && to === range.end;
-            return (
-              <button
-                key={range.label}
-                type="button"
-                className={`button${active ? " button--active" : " button--ghost"}`}
-                onClick={() => {
-                  setFrom(range.start);
-                  setTo(range.end);
-                }}
-              >
-                <CalendarRange size={14} />
-                {range.label}
-              </button>
-            );
-          })}
+        <div className="range-controls">
+          <div className="range-buttons" role="group" aria-label="Date range">
+            {quickRanges.map((range) => {
+              const active = from === range.start && to === range.end;
+              return (
+                <button
+                  key={range.label}
+                  type="button"
+                  className={`range-button${active ? " is-active" : ""}`}
+                  aria-pressed={active}
+                  onClick={() => {
+                    setFrom(range.start);
+                    setTo(range.end);
+                  }}
+                >
+                  {range.label}
+                </button>
+              );
+            })}
+          </div>
+          {loading && accuracy ? (
+            <span className="range-status" role="status">
+              Updating
+            </span>
+          ) : null}
         </div>
       ) : null}
 
       {indexError ? (
-        <ErrorNotice
-          message={indexError}
-          onRetry={() => setReloadKey((key) => key + 1)}
-        />
+        <ErrorNotice message={indexError} onRetry={retryIndex} />
       ) : null}
 
       {error ? (
@@ -481,8 +471,8 @@ export function AccuracyLab() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       labelFormatter={(label) => dateLabel(String(label))}
                       formatter={(value, name) => {
                         const numeric = Number(value);
@@ -495,9 +485,9 @@ export function AccuracyLab() {
                     <Legend
                       iconType="circle"
                       iconSize={8}
-                      wrapperStyle={{ fontSize: 12, color: "#94a3b8" }}
+                      wrapperStyle={tooltipWrapperStyle}
                     />
-                    <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+                    <ReferenceLine y={0} {...referenceLineStyle} />
                     <Bar
                       dataKey="mae_mw"
                       name="MAE"
@@ -507,12 +497,13 @@ export function AccuracyLab() {
                       isAnimationActive={false}
                     />
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey="bias_mw"
                       name="Bias"
                       stroke={COLORS.forecast}
                       strokeWidth={2}
                       dot={false}
+                      activeDot={{ r: 4 }}
                       isAnimationActive={false}
                     />
                   </ComposedChart>
@@ -550,7 +541,7 @@ export function AccuracyLab() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      itemStyle={tooltipItemStyle}
                       formatter={(value, name) => {
                         const numeric = Number(value);
                         return [
@@ -613,8 +604,8 @@ export function AccuracyLab() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       labelFormatter={(label) => `${label} GW`}
                       formatter={(value) => [
                         `${Number(value)} points`,
@@ -663,8 +654,8 @@ export function AccuracyLab() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       labelFormatter={(label) => `${label} UTC`}
                       formatter={(value) => [
                         mw(Number(value)),
@@ -708,8 +699,8 @@ export function AccuracyLab() {
                     />
                     <Tooltip
                       contentStyle={tooltipStyle}
-                      labelStyle={{ color: "#94a3b8" }}
-                      itemStyle={{ color: "#e2e8f0" }}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       formatter={(value, name) => {
                         const numeric = Number(value);
                         return [
@@ -721,7 +712,7 @@ export function AccuracyLab() {
                     <Legend
                       iconType="circle"
                       iconSize={8}
-                      wrapperStyle={{ fontSize: 12, color: "#94a3b8" }}
+                      wrapperStyle={tooltipWrapperStyle}
                     />
                     <Bar
                       dataKey="mae_mw"
@@ -732,12 +723,13 @@ export function AccuracyLab() {
                       isAnimationActive={false}
                     />
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey="bias_mw"
                       name="Bias"
                       stroke={COLORS.forecast}
                       strokeWidth={2}
                       dot={false}
+                      activeDot={{ r: 4 }}
                       isAnimationActive={false}
                     />
                   </ComposedChart>

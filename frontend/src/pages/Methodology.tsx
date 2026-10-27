@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 
 import { Badge } from "../components/Badge";
+import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 
 const facts = [
@@ -13,20 +14,16 @@ const facts = [
 export function Methodology() {
   return (
     <>
-      <header className="page-header">
-        <div>
-          <div className="eyebrow">Methodology</div>
-          <h1>What this build does, and what it does not</h1>
-          <p className="page-subtitle">
-            A short, honest account of the data, the decision cut-off, the
-            metric definitions, the uncertainty band, and the limits of a
-            one-month pilot.
-          </p>
-        </div>
-        <Badge tone="info" dot>
-          January 2026 · national wind
-        </Badge>
-      </header>
+      <PageHeader
+        eyebrow="Methodology"
+        title="What this build does, and what it does not"
+        subtitle="A short, honest account of the data, the decision cut-off, the metric definitions, the uncertainty band, and the limits of a one-month pilot."
+        actions={
+          <Badge tone="info" dot>
+            January 2026, national wind
+          </Badge>
+        }
+      />
 
       <div className="methodology stack">
         <SectionCard eyebrow="Snapshot" title="The January 2026 pilot">

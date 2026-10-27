@@ -187,8 +187,11 @@ FastAPI app  ──►  Store (SQLite snapshot)
 - `backend/app/ingest.py` is a repeatable CLI that writes the snapshot.
 - `backend/app/analysis.py` turns domain records into decision and accuracy views. It is the main test surface.
 - `backend/app/api.py` is a thin HTTP adapter over the store and analysis module.
-- `backend/app/main.py` serves the API and the built SPA from the same origin.
-- `frontend/src` is a three-page React app: Decision Room, Accuracy Lab, Methodology.
+- `backend/app/main.py` serves the API and the built SPA from the same origin, with conservative security headers, immutable caching for hashed assets, `no-store` API responses, and a JSON `503` if SQLite is unavailable.
+- `backend/app/api.py` caches the month context used for decision bands, keyed by the snapshot file's modification time, so repeat day selections do not re-read the full month.
+- `frontend/src` is a three-page React app using lazy route chunks, a shared `useSnapshotIndex` hook for metadata and date coverage, and a top-level error boundary.
+- `frontend/src/api.ts` applies a 15-second request timeout, propagates unmount aborts, and normalizes network, timeout, invalid-JSON, and FastAPI validation errors into human-readable messages.
+- Snapshot-index failures show a retryable notice; decision and accuracy failures keep the selected controls intact and can be retried without reloading the page.
 
 The single-image choice keeps the deployment small and avoids CORS and two-service drift. The cost is that data refresh is an explicit batch step rather than a background job. The trade-off and alternatives are recorded in [docs/adr/0001-simple-monolith.md](docs/adr/0001-simple-monolith.md).
 
@@ -228,7 +231,7 @@ ruff check app tests
 ruff format --check app tests
 ```
 
-Current suite: **18 tests**, covering gate closure, vintage selection, half-hour aggregation (including incomplete pairs), metric values, quantiles, histogram, store idempotence, Elexon filtering, the health/meta/dates/decision/accuracy endpoints, invalid input, snapshot date bounds, and last-ingest metadata.
+Current suite: **21 tests**, covering gate closure, vintage selection, half-hour aggregation (including incomplete pairs), metric values, quantiles, histogram, store idempotence, Elexon filtering, the health/meta/dates/decision/accuracy endpoints, invalid input, snapshot date bounds, last-ingest metadata, production headers, API cache policy, unknown API routes, and database-failure handling.
 
 Frontend:
 
@@ -238,7 +241,7 @@ npm run typecheck
 npm run build
 ```
 
-The build is also the frontend's typecheck. There is no browser test runner in the timebox; the UI was manually checked at desktop and mobile widths.
+`npm run build` runs the TypeScript check before Vite. There is no committed browser test runner in the timebox; all routes, the skip link, retry recovery, and horizontal overflow were checked in headless Chrome at 1440 px and 390 px.
 
 ## Deployment
 

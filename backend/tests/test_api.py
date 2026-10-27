@@ -104,6 +104,27 @@ def test_invalid_requests_are_rejected(client: TestClient) -> None:
     )
 
 
+def test_api_sets_safe_headers_and_disables_caching(client: TestClient) -> None:
+    response = client.get("/api/health")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_unknown_api_route_is_json_not_spa(client: TestClient) -> None:
+    response = client.get("/api/does-not-exist")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_database_failure_returns_503(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("app.api.DB_PATH", tmp_path)
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get("/api/health")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The snapshot database is unavailable."
+
+
 def test_requests_outside_the_snapshot_are_rejected(client: TestClient) -> None:
     for params in (
         {"date": "0001-01-01"},

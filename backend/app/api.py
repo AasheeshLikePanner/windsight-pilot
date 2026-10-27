@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,6 +19,7 @@ from .config import (
     SOURCE_FORECASTS,
     TIMEZONE,
 )
+from .domain import DecisionPoint
 from .store import Store
 from .timeutils import day_bounds
 
@@ -25,6 +27,32 @@ router = APIRouter(prefix="/api")
 
 DATA_START_DAY = date.fromisoformat(DATA_START)
 DATA_END_DAY = date.fromisoformat(DATA_END)
+
+
+def _snapshot_version() -> int:
+    try:
+        return DB_PATH.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+@lru_cache(maxsize=4)
+def _decision_points(db_path: str, db_version: int) -> tuple[DecisionPoint, ...]:
+    """Load the month context once per snapshot version for decision bands."""
+    store = Store(db_path)
+    try:
+        start, _ = day_bounds(DATA_START_DAY)
+        _, end = day_bounds(DATA_END_DAY)
+        return tuple(
+            decision_points_for_range(
+                store.actuals_between(start, end),
+                store.forecasts_between(start, end),
+                DATA_START_DAY,
+                DATA_END_DAY,
+            )
+        )
+    finally:
+        store.close()
 
 
 def get_store() -> Iterator[Store]:
@@ -129,16 +157,7 @@ def decision(
     day: str = Query(default="", alias="date"),
 ) -> dict:
     selected = _parse_day(day or DATA_END, "date")
-    start, _ = day_bounds(date.fromisoformat(DATA_START))
-    _, end = day_bounds(date.fromisoformat(DATA_END))
-    actuals = store.actuals_between(start, end)
-    forecasts = store.forecasts_between(start, end)
-    all_points = decision_points_for_range(
-        actuals,
-        forecasts,
-        date.fromisoformat(DATA_START),
-        date.fromisoformat(DATA_END),
-    )
+    all_points = _decision_points(str(DB_PATH), _snapshot_version())
     return decision_view(store, selected, all_points)
 
 

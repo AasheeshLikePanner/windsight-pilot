@@ -8,7 +8,7 @@ A small React + Python app for a UK utility’s day-ahead buying team, using onl
 - **Accuracy Lab:** typical misses, bias, large errors and data coverage across a chosen range.
 - **Methodology:** plain-English explanations of the numbers and assumptions.
 
-**Live app:** Vercel deployment pending verification.
+**Live app:** [windsight-pilot.vercel.app](https://windsight-pilot.vercel.app).
 
 **Demo video:** the author will add the final unlisted YouTube link.
 

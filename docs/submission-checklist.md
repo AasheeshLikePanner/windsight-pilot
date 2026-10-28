@@ -10,10 +10,10 @@ Only mark deployment and submission items complete after verifying the final ver
 - [x] Earlier history excludes future and late-published actual data.
 - [x] 31 backend tests pass; Ruff lint passes; TypeScript and Vite build pass.
 - [x] README explains setup, directories, formulas, assumptions and AI use.
-- [ ] Final browser checks at desktop and mobile widths.
-- [ ] Rebuild and run the final Docker image (local daemon must be running).
-- [ ] Final public Vercel URL verified without login and added to README.
-- [ ] Updated source pushed to public GitHub repository.
+- [x] Public app checked in browser at desktop and mobile widths.
+- [x] Final Docker image built and health endpoint checked.
+- [x] Public Vercel URL verified without login and added to README; production smoke passed.
+- [x] Updated source pushed to the public `assignment-alignment` branch.
 - [ ] Confirm the neutral repository name satisfies the evaluator’s anonymity rule.
 - [ ] Author’s unlisted YouTube video, maximum 10 minutes, added to README.
 - [ ] Final URLs checked in incognito.

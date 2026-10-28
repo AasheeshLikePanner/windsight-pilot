@@ -102,3 +102,9 @@ export function compact(value: number): string {
     maximumFractionDigits: 1,
   }).format(value);
 }
+
+export function purchaseDate(deliveryDate: string): string {
+  const day = new Date(`${deliveryDate}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
+}

@@ -39,6 +39,7 @@ class DecisionPoint:
     actual_mw: float
     forecast_publish_time: datetime
     lead_time_hours: float
+    actual_available_time: datetime | None = None
 
     @property
     def error_mw(self) -> float:

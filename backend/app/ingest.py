@@ -14,10 +14,9 @@ from .config import (
     DATA_START,
     DB_PATH,
     FORECAST_DATASET,
-    GATE_CLOSURE_HOUR,
+    GATE_CLOSURE_LABEL,
     SOURCE_ACTUALS,
     SOURCE_FORECASTS,
-    TIMEZONE,
 )
 from .elexon import ElexonClient, ElexonError
 from .store import Store
@@ -106,7 +105,7 @@ def run_ingest(
         "db_size_mb": counts["db_size_mb"],
         "status": status,
         "errors": errors,
-        "gate_closure_rule": f"{GATE_CLOSURE_HOUR}:00 {TIMEZONE}, day before delivery",
+        "gate_closure_rule": GATE_CLOSURE_LABEL,
         "datasets": {
             "actuals": ACTUAL_DATASET,
             "forecasts": FORECAST_DATASET,

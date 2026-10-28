@@ -50,6 +50,7 @@ import {
   gwTick,
   mw,
   pct,
+  purchaseDate,
   periodLabel,
   rangeLabel,
   signedMw,
@@ -269,7 +270,7 @@ export function AccuracyLab() {
 
   const dateOptions = dates.map((row) => ({
     value: row.date,
-    label: dateLabel(row.date),
+    label: dateLabel(purchaseDate(row.date)),
   }));
 
   const firstDate = dates[0]?.date ?? "";
@@ -294,13 +295,13 @@ export function AccuracyLab() {
     <>
       <PageHeader
         eyebrow="Accuracy lab"
-        title="Where the forecast earns its keep"
-        subtitle="A month-long review of the pre-gate wind forecast. The headline is not one error number; it is how the error changes with time of day, forecast level, and lead time."
+        title="How much did the wind forecast miss?"
+        subtitle="Review forecasts used for January buying decisions. Positive error means less wind arrived than forecast; negative error means more. All headline metrics compare complete hourly pairs."
         actions={
           <>
             <DateField
               id="accuracy-from"
-              label="From"
+              label="Buying day · from"
               value={from}
               options={dateOptions}
               onChange={setFrom}
@@ -308,7 +309,7 @@ export function AccuracyLab() {
             />
             <DateField
               id="accuracy-to"
-              label="To"
+              label="Buying day · to"
               value={to}
               options={dateOptions}
               onChange={setTo}
@@ -579,7 +580,7 @@ export function AccuracyLab() {
               <div
                 className="chart chart--small"
                 role="img"
-                aria-label="Histogram of signed hourly forecast errors, split into negative shortfall bins and positive over-forecast bins."
+                aria-label="Histogram of signed hourly forecast errors, split into negative under-forecast bins and positive over-forecast bins."
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -627,8 +628,7 @@ export function AccuracyLab() {
               </div>
               <p className="chart-note">
                 Negative bins are under-forecasts; positive bins are
-                over-forecasts. January skews heavily to the right, which is the
-                month&apos;s dominant bias.
+                over-forecasts. Use the bias above to see the direction of error in your selected range.
               </p>
             </SectionCard>
 
@@ -679,7 +679,7 @@ export function AccuracyLab() {
           <div className="grid-2 grid-2--even">
             <SectionCard
               title="Accuracy by lead time"
-              description="Every stored vintage, bucketed by how far ahead the delivery hour was. This is the model's horizon curve."
+              description="Every stored vintage, bucketed by how far ahead the delivery hour was. Only pre-cut-off vintages are stored; shorter horizons and post-cut-off updates are not represented."
             >
               <div
                 className="chart chart--small"

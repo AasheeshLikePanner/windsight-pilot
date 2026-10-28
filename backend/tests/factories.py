@@ -14,7 +14,7 @@ def actuals_for(day: date, base: float = 10_000.0, step: float = 100.0) -> list[
             settlement_date=day,
             settlement_period=index + 1,
             generation_mw=base + step * index,
-            publish_time=None,
+            publish_time=start + timedelta(minutes=30 * (index + 1)),
         )
         for index in range(48)
     ]
@@ -26,7 +26,7 @@ def forecasts_for(
     step: float = 100.0,
     publish_time: datetime | None = None,
 ) -> list[Forecast]:
-    publish = publish_time or gate_closure_for(day) - timedelta(hours=1.5)
+    publish = publish_time or gate_closure_for(day) - timedelta(minutes=20)
     start = datetime.combine(day, time.min, tzinfo=UTC)
     return [
         Forecast(

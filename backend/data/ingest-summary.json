@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-26T05:32:27Z",
-  "start": "2026-01-01",
-  "end": "2026-01-31",
+  "generated_at": "2026-10-28T06:09:20Z",
+  "start": "2026-01-02",
+  "end": "2026-02-01",
   "days": 31,
   "actual_rows": 1488,
   "forecast_rows": 8432,
@@ -9,7 +9,7 @@
   "db_size_mb": 1.32,
   "status": "ok",
   "errors": [],
-  "gate_closure_rule": "11:00 Europe/London, day before delivery",
+  "gate_closure_rule": "09:50 UK time on the day before delivery (N2EX)",
   "datasets": {
     "actuals": "FUELHH",
     "forecasts": "WINDFOR",
@@ -20,8 +20,8 @@
   },
   "last_run": {
     "id": 1,
-    "started_at": "2026-10-26T05:32:10Z",
-    "completed_at": "2026-10-26T05:32:27Z",
+    "started_at": "2026-10-28T06:09:07Z",
+    "completed_at": "2026-10-28T06:09:20Z",
     "actual_count": 1488,
     "forecast_count": 8432,
     "status": "ok",

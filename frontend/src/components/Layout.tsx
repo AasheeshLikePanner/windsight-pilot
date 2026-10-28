@@ -62,7 +62,7 @@ export function Layout() {
             <Database size={14} aria-hidden="true" />
             <span>Elexon BMRS snapshot</span>
           </div>
-          <p>January 2026, national wind</p>
+          <p>January 2026 buying decisions</p>
           <p className="sidebar__fine">
             A pilot decision-support build. Not affiliated with Elexon or REint AI.
           </p>

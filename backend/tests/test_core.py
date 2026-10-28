@@ -22,8 +22,8 @@ from tests.factories import actuals_for, forecasts_for, seed_store
 DAY = date(2026, 1, 15)
 
 
-def test_gate_closure_is_previous_day_11_utc() -> None:
-    assert gate_closure_for(DAY) == datetime(2026, 1, 14, 11, 0, tzinfo=UTC)
+def test_gate_closure_is_previous_day_n2ex_cutoff() -> None:
+    assert gate_closure_for(DAY) == datetime(2026, 1, 14, 9, 50, tzinfo=UTC)
 
 
 def test_day_bounds_and_date_range() -> None:
@@ -188,7 +188,7 @@ def test_elexon_forecasts_filter_horizon_and_gate() -> None:
         },
         {
             "startTime": "2026-01-15T00:00:00Z",
-            "publishTime": "2026-01-14T10:30:00Z",
+            "publishTime": "2026-01-14T09:50:00Z",
             "generation": 1_100,
         },
         {
@@ -224,4 +224,4 @@ def test_elexon_forecasts_filter_horizon_and_gate() -> None:
     assert len(forecasts) == 2
     assert forecasts[0].generation_mw == 1_000
     assert forecasts[1].generation_mw == 1_100
-    assert forecasts[1].publish_time == datetime(2026, 1, 14, 10, 30, tzinfo=UTC)
+    assert forecasts[1].publish_time == datetime(2026, 1, 14, 9, 50, tzinfo=UTC)

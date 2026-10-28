@@ -13,8 +13,12 @@ from .config import (
     DATA_END,
     DATA_START,
     DB_PATH,
+    DECISION_END,
+    DECISION_START,
     FORECAST_DATASET,
     GATE_CLOSURE_HOUR,
+    GATE_CLOSURE_LABEL,
+    GATE_CLOSURE_MINUTE,
     SOURCE_ACTUALS,
     SOURCE_FORECASTS,
     TIMEZONE,
@@ -39,7 +43,7 @@ def _snapshot_version() -> int:
 @lru_cache(maxsize=4)
 def _decision_points(db_path: str, db_version: int) -> tuple[DecisionPoint, ...]:
     """Load the month context once per snapshot version for decision bands."""
-    store = Store(db_path)
+    store = Store(db_path, read_only=True)
     try:
         start, _ = day_bounds(DATA_START_DAY)
         _, end = day_bounds(DATA_END_DAY)
@@ -56,7 +60,7 @@ def _decision_points(db_path: str, db_version: int) -> tuple[DecisionPoint, ...]
 
 
 def get_store() -> Iterator[Store]:
-    store = Store(DB_PATH)
+    store = Store(DB_PATH, read_only=True)
     try:
         yield store
     finally:
@@ -111,10 +115,11 @@ def meta(store: StoreDep) -> dict:
         "name": "WindSight",
         "subtitle": "Day-ahead wind forecast intelligence",
         "period": {"from": DATA_START, "to": DATA_END},
+        "purchase_period": {"from": DECISION_START, "to": DECISION_END},
         "gate_closure": {
-            "local_time": f"{GATE_CLOSURE_HOUR}:00",
+            "local_time": f"{GATE_CLOSURE_HOUR:02d}:{GATE_CLOSURE_MINUTE:02d}",
             "timezone": TIMEZONE,
-            "rule": "11:00 UK time on the day before delivery",
+            "rule": GATE_CLOSURE_LABEL,
         },
         "resolution": {"actuals": "30 min", "forecasts": "60 min (hourly)"},
         "counts": counts,
@@ -136,7 +141,7 @@ def meta(store: StoreDep) -> dict:
         },
         "notes": [
             "Scope is national wind generation only, from Elexon BMRS.",
-            "The decision cut-off is 11:00 UK time on D-1 (day-ahead gate closure).",
+            "The decision cut-off is 09:50 UK time on D-1 (N2EX day-ahead auction).",
             "WINDFOR is hourly; metrics use hourly decision points.",
         ],
     }
@@ -144,7 +149,9 @@ def meta(store: StoreDep) -> dict:
 
 @router.get("/dates")
 def dates(store: StoreDep) -> dict:
-    coverage = store.date_coverage()
+    coverage = [
+        row for row in store.date_coverage() if DATA_START <= row["date"] <= DATA_END
+    ]
     return {
         "dates": coverage,
         "default": coverage[-1]["date"] if coverage else None,

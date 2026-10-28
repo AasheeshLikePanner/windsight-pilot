@@ -45,14 +45,22 @@ class Store:
     records, report counts. SQL stays inside this module.
     """
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, read_only: bool = False) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        if read_only:
+            self.conn = sqlite3.connect(
+                f"{self.path.resolve().as_uri()}?mode=ro",
+                uri=True,
+                check_same_thread=False,
+            )
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA busy_timeout = 5000")
-        self.conn.executescript(SCHEMA)
-        self.conn.commit()
+        if not read_only:
+            self.conn.executescript(SCHEMA)
+            self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()

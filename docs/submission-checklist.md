@@ -1,53 +1,22 @@
 # Submission checklist
 
-## Repository
+Only mark deployment and submission items complete after verifying the final version.
 
-- [x] Public GitHub repository: <https://github.com/AasheeshLikePanner/windsight-pilot>
-      (anonymous repo name; neutral commit author).
-- [x] `.venv/`, `frontend/node_modules/`, `frontend/dist/`, caches, and `.env`
-      are not committed.
-- [x] `backend/data/windsight.db` and `backend/data/ingest-summary.json` are
-      committed.
-- [x] README includes the live URL, video URL, data sources, how to run, AI-tool
-      disclosure, and limitations.
-- [x] `git status` is clean after the final commit.
-- [x] Commit history uses a GitHub noreply address; commit author is neutral.
+- [x] React frontend and Python backend.
+- [x] Elexon WIND actuals and WINDFOR forecasts only.
+- [x] January buying days mapped to 2 January–1 February delivery.
+- [x] Explicit N2EX 09:50 UK cutoff; no later forecast selected.
+- [x] Forecast view separated from realised outcomes.
+- [x] Earlier history excludes future and late-published actual data.
+- [x] 31 backend tests pass; Ruff lint passes; TypeScript and Vite build pass.
+- [x] README explains setup, directories, formulas, assumptions and AI use.
+- [x] Public app checked in browser at desktop and mobile widths.
+- [x] Final Docker image built and health endpoint checked.
+- [x] Public Vercel URL verified without login and added to README; production smoke passed.
+- [x] Updated source pushed to the public `assignment-alignment` branch.
+- [ ] Confirm the neutral repository name satisfies the evaluator’s anonymity rule.
+- [ ] Author’s unlisted YouTube video, maximum 10 minutes, added to README.
+- [ ] Final URLs checked in incognito.
+- [ ] Submission form completed by the author.
 
-## App
-
-- [x] `docker build -t windsight .` succeeds.
-- [x] `docker run --rm -p 8000:8000 windsight` serves the SPA at `/`.
-- [x] `/api/health`, `/api/decision?date=2026-01-15`, and
-      `/api/accuracy?from=2026-01-01&to=2026-01-31` respond.
-- [x] Deep link `/accuracy` and `/methodology` work on refresh.
-- [x] Empty-snapshot and API-failure states were checked; retries recover.
-- [x] Out-of-range API dates return `400`.
-- [x] Desktop and mobile layouts checked.
-- [x] `pytest -q` (21 passed) and `ruff check app tests` pass.
-- [x] `npm run build` passes.
-
-## Deployment
-
-- [x] Live URL: <https://windsight-sda4.onrender.com> (opens with no login).
-- [x] `BASE_URL=https://windsight-sda4.onrender.com ./scripts/smoke.sh` passes.
-- [x] Health check path is `/api/health`.
-- [x] The snapshot is present in the deployed container (1,488 actuals; 8,432 forecasts).
-- [x] No secrets are required at runtime.
-
-## Video
-
-- [x] Captioned walkthrough: <https://github.com/AasheeshLikePanner/windsight-pilot/releases/download/v0.1.0/windsight-silent-walkthrough.mp4>
-- [x] 7:52, covering the decision view, accuracy lab, methodology, architecture,
-      tests, and deployment.
-- [x] Shows the live app, decision view, accuracy view, tests, and limitations.
-- [x] Silent by design (captioned); no personal tabs or notifications. Add a
-      voiceover from `docs/demo-script.md` if a narrated version is preferred.
-- [x] The video link is in the README.
-
-## Submission form
-
-- [ ] Live URL.
-- [ ] Repository URL.
-- [ ] Video URL.
-- [ ] AI tools disclosed.
-- [ ] URLs re-checked in incognito immediately before submitting.
+The old Render deployment and GitHub-hosted video are not substitutes for the required Vercel/Heroku URL and unlisted YouTube video. Historical screenshots and the old demo script describe the earlier version.

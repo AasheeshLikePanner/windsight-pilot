@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -26,7 +27,8 @@ class ElexonError(RuntimeError):
 
 def _as_float(value: Any) -> float | None:
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -75,6 +77,8 @@ class ElexonClient:
                 response = self._client.get(path, params=params)
                 response.raise_for_status()
                 payload = response.json()
+                if not isinstance(payload, dict):
+                    raise ElexonError(f"Unexpected payload from {path}: not an object")
                 data = payload.get("data")
                 if not isinstance(data, list):
                     raise ElexonError(
@@ -122,6 +126,8 @@ class ElexonClient:
                 settlement_period = int(row["settlementPeriod"])
             except (KeyError, TypeError, ValueError) as exc:
                 logger.warning("Skipping malformed actual (%s): %s", exc, row)
+                continue
+            if settlement_date != day or not (1 <= settlement_period <= 48):
                 continue
             try:
                 publish = (

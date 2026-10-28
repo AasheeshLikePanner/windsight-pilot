@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
-  CalendarDays,
   Clock3,
-  Gauge,
   ShieldAlert,
-  Target,
   Wind,
 } from "lucide-react";
 import {
@@ -53,6 +49,7 @@ import {
   longDate,
   mw,
   pct,
+  purchaseDate,
   periodLabel,
   signedMw,
 } from "../format";
@@ -69,16 +66,6 @@ type ChartRow = {
   leadTime: number | null;
 };
 
-function toneForBias(bias: number): "good" | "warn" {
-  return Math.abs(bias) <= 1_000 ? "good" : "warn";
-}
-
-function toneForError(mae: number): "good" | "warn" | "bad" {
-  if (mae <= 1_200) return "good";
-  if (mae <= 2_200) return "warn";
-  return "bad";
-}
-
 function toneForCoverage(coverage: number): "good" | "warn" | "bad" {
   if (coverage >= 100) return "good";
   if (coverage >= 90) return "warn";
@@ -93,6 +80,7 @@ export function DecisionRoom() {
     error: indexError,
     retry: retryIndex,
   } = useSnapshotIndex();
+  const [showOutturn, setShowOutturn] = useState(false);
   const [selected, setSelected] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [loading, setLoading] = useState(false);
@@ -174,7 +162,7 @@ export function DecisionRoom() {
         ...decision.periods.map((period) => period.shortfall_buffer_mw ?? 0),
       )
     : 0;
-  const overForecast = (summary?.bias_mw ?? 0) >= 0;
+  const historyMetrics = decision?.history.metrics;
 
   const worstColumns: Column<Period>[] = [
     {
@@ -222,19 +210,19 @@ export function DecisionRoom() {
 
   const dateOptions = dates.map((row) => ({
     value: row.date,
-    label: `${dateLabel(row.date)}, ${row.actual_rows}/48 actuals`,
+    label: dateLabel(purchaseDate(row.date)),
   }));
 
   return (
     <>
       <PageHeader
         eyebrow="Decision room"
-        title={decision ? longDate(decision.date) : "Day-ahead wind decision"}
-        subtitle="The picture a trading or operations desk would have seen at gate closure: the latest pre-gate wind forecast, how the day actually landed, and where the shortfall risk sat."
+        title={decision ? `Wind for ${dateLabel(decision.date)}` : "Plan tomorrow’s wind supply"}
+        subtitle={decision ? `Buying on ${longDate(decision.purchase_date)}. Forecasts published by 09:50 UK time, for delivery the following day.` : "Choose a January buying day to see tomorrow’s wind forecast and the earlier errors available at the cut-off."}
         actions={
           <DateField
             id="decision-date"
-            label="Delivery day"
+            label="Buying day · January 2026"
             value={selected}
             options={dateOptions}
             onChange={setSelected}
@@ -284,66 +272,35 @@ export function DecisionRoom() {
         />
       ) : null}
 
-      {decision && summary && summary.n > 0 ? (
+      {decision && summary && decision.forecast_summary.hours > 0 ? (
         <>
           <div className="kpi-grid">
-            <KpiCard
-              label="Forecast energy"
-              value={gwh(summary.forecast_energy_gwh)}
-              hint={`${summary.n} hourly decision points`}
-              icon={<Wind size={16} />}
-            />
-            <KpiCard
-              label="Actual energy"
-              value={gwh(summary.actual_energy_gwh)}
-              hint="Elexon FUELHH half-hours"
-              icon={<Activity size={16} />}
-            />
-            <KpiCard
-              label="Forecast bias"
-              value={signedMw(summary.bias_mw)}
-              hint={overForecast ? "Over-forecast on average" : "Under-forecast on average"}
-              tone={toneForBias(summary.bias_mw)}
-              icon={<Gauge size={16} />}
-            />
-            <KpiCard
-              label="Mean absolute error"
-              value={mw(summary.mae_mw)}
-              hint={`${pct(summary.nmae_pct)} of mean actual`}
-              tone={toneForError(summary.mae_mw)}
-              icon={<Target size={16} />}
-            />
-            <KpiCard
-              label="Within ±1 GW"
-              value={pct(summary.within_1gw_pct)}
-              hint="Share of hourly points"
-              tone={summary.within_1gw_pct >= 50 ? "good" : "warn"}
-              icon={<ShieldAlert size={16} />}
-            />
-            <KpiCard
-              label="Data coverage"
-              value={pct(coverage)}
-              hint={`${decision.data_quality.actual_periods}/48 actuals · ${decision.data_quality.forecast_hours} forecast hours`}
-              tone={toneForCoverage(coverage)}
-              icon={<CalendarDays size={16} />}
-            />
+            <KpiCard label="Forecast wind energy" value={gwh(decision.forecast_summary.energy_gwh)}
+              hint={`${decision.forecast_summary.hours}/24 delivery hours · national total`} icon={<Wind size={16} />} />
+            <KpiCard label="Average forecast output" value={gw(decision.forecast_summary.mean_mw)}
+              hint="Expected power across available hours" />
+            <KpiCard label="Earlier typical miss" value={mw(historyMetrics?.mae_mw)}
+              hint={historyMetrics ? `MAE across ${decision.history.points} earlier hours` : "Not enough earlier data"} />
+            <KpiCard label="Earlier P90 shortfall" value={mw(historyMetrics?.p90_shortfall_mw)}
+              hint="90th percentile of max(forecast − actual, 0)" icon={<ShieldAlert size={16} />} />
+          </div>
+          <div className="callout callout--info mb-18">
+            <strong>Use this in your buying plan.</strong> Less wind means more supply to cover elsewhere.
+            Compare the hourly forecast below with your own demand and contracted supply.
+            These are national wind figures, not your utility’s allocation; this pilot cannot calculate your purchase volume.
           </div>
 
           <div className="grid-2">
             <SectionCard
               eyebrow="Delivery day"
-              title="Actual vs pre-gate forecast"
-              description="Half-hourly actuals against the latest WINDFOR vintage published before 11:00 UK time on D-1. The shaded band is the empirical P10–P90 error range for the forecast level."
-              actions={
-                <Badge tone={overForecast ? "warn" : "info"} dot>
-                  {overForecast ? "Over-forecast" : "Under-forecast"}
-                </Badge>
-              }
+              title="Tomorrow’s wind, as known at the cut-off"
+              description="The latest available forecast for each hour. The shaded range uses only earlier errors published by this buying cut-off."
+              actions={<Badge tone="info">N2EX · 09:50 UK</Badge>}
             >
               <div
                 className="chart chart--main"
                 role="img"
-                aria-label="Half-hourly actual wind generation against the pre-gate forecast, with a P10 to P90 uncertainty band."
+                aria-label="Wind forecast available at the buying cut-off, with an earlier-data P10 to P90 range when enough history exists."
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
@@ -365,9 +322,7 @@ export function DecisionRoom() {
                       formatter={(value, name) => {
                         const numeric = Array.isArray(value) ? null : Number(value);
                         return [
-                          numeric === null || Number.isNaN(numeric)
-                            ? "—"
-                            : mw(numeric),
+                          Array.isArray(value) ? `${mw(Number(value[0]))}–${mw(Number(value[1]))}` : numeric === null || Number.isNaN(numeric) ? "—" : mw(numeric),
                           String(name),
                         ];
                       }}
@@ -386,17 +341,18 @@ export function DecisionRoom() {
                       fillOpacity={0.12}
                       isAnimationActive={false}
                     />
-                    <Line
-                      type="monotone"
+                    {showOutturn ? <Line
+                      type="linear"
                       dataKey="actual"
-                      name="Actual"
+                      name="Actual · known later"
                       stroke={COLORS.actual}
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
                     />
+                    : null}
                     <Line
-                      type="monotone"
+                      type="stepAfter"
                       dataKey="forecast"
                       name="Forecast at gate"
                       stroke={COLORS.forecast}
@@ -407,6 +363,10 @@ export function DecisionRoom() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              <label className="outturn-toggle">
+                <input type="checkbox" checked={showOutturn} onChange={(event) => setShowOutturn(event.target.checked)} />
+                Show actual results · known after the buying decision
+              </label>
               <p className="chart-note">
                 Forecast values repeat across the two half-hours of each hour
                 because WINDFOR is hourly. The summary metrics use the 24 hourly
@@ -416,8 +376,8 @@ export function DecisionRoom() {
 
             <SectionCard
               eyebrow="At the cut-off"
-              title="Decision brief"
-              description="What was knowable before the day-ahead gate closed."
+              title="Before you buy"
+              description="Forecast timing and the evidence available for this buying day."
             >
               <div className="brief">
                 <div className="brief__row">
@@ -427,7 +387,7 @@ export function DecisionRoom() {
                   </span>
                 </div>
                 <div className="brief__row">
-                  <span className="brief__label">Vintage used</span>
+                  <span className="brief__label">Newest selected release</span>
                   <span className="brief__value">
                     {dateTime(decision.vintage.publish_time)}
                   </span>
@@ -448,36 +408,59 @@ export function DecisionRoom() {
                   </span>
                 </div>
                 <div className="brief__row">
-                  <span className="brief__label">Actual periods</span>
+                  <span className="brief__label">Earlier error observations</span>
                   <span className="brief__value">
-                    {decision.data_quality.actual_periods}/48
+                    {decision.history.points} hourly pairs
                   </span>
                 </div>
                 <div className="brief__row">
-                  <span className="brief__label">Widest half-hour buffer</span>
-                  <span className="brief__value">{mw(widestBuffer)}</span>
+                  <span className="brief__label">Largest historical buffer</span>
+                  <span className="brief__value">{decision.history.ready ? mw(widestBuffer) : "Not enough history"}</span>
                 </div>
               </div>
 
-              <div className={`callout${overForecast ? "" : " callout--info"}`}>
-                <strong>{overForecast ? "Reserve watch." : "Surplus watch."}</strong>{" "}
-                {overForecast
-                  ? `The forecast ran ${gw(summary.bias_mw)} above actual on average. The P90 shortfall buffer for the day was ${mw(summary.p90_shortfall_mw)}; that is the reserve this forecast would have justified.`
-                  : `The forecast ran ${gw(Math.abs(summary.bias_mw))} below actual on average. The desk would have been long relative to the wind outturn; the P90 shortfall buffer was ${mw(summary.p90_shortfall_mw)}.`}
-              </div>
               <div className="callout callout--info">
-                <strong>Why this matters.</strong> Wind shortfalls have to be
-                covered closer to delivery, often at a worse price. The buffer
-                turns an error distribution into a reserve number a desk can
-                argue about.
+                {decision.history.ready ? <>
+                  <strong>Earlier evidence.</strong> The range uses {decision.history.points} hourly errors
+                  from {dateLabel(decision.history.from!)} to {dateLabel(decision.history.to!)} that were published by this cut-off.
+                  Positive errors mean actual wind fell below forecast, leaving a supply shortfall to cover.
+                </> : <>
+                  <strong>Not enough earlier evidence.</strong> Only {decision.history.points} earlier hourly errors
+                  are available in this snapshot; at least {decision.history.minimum_points} are needed.
+                  We show the forecast without inventing an uncertainty range.
+                </>}
               </div>
+              <p className="chart-note">A historical range is a starting point for reviewing exposure, not a guaranteed reserve requirement. Actual results below are hindsight.</p>
             </SectionCard>
           </div>
 
+          <SectionCard title="Hourly forecast detail" description="Every delivery hour, its publication time, and a lower-wind scenario from earlier errors." className="mb-18">
+            <details>
+              <summary>View all 24 delivery hours</summary>
+              <DataTable<Period> rows={decision.periods.filter((_, index) => index % 2 === 0)}
+                rowKey={(row) => row.start_time}
+                columns={[
+                  { header: "Hour · UTC", render: (row) => periodLabel(row.start_time) },
+                  { header: "Forecast", align: "right", render: (row) => mw(row.forecast_mw) },
+                  { header: "Lower wind", align: "right", render: (row) => mw(row.lower_mw) },
+                  { header: "Published", render: (row) => dateTime(row.forecast_publish_time) },
+                ]} />
+            </details>
+          </SectionCard>
+
+          {showOutturn ? <>
+          <SectionCard title="After delivery: how the forecast performed" description="These results were not available at the buying cut-off." className="mb-18">
+            <div className="stat-inline">
+              <div><div className="small-label">Actual energy · matched hours</div><strong>{summary.n ? gwh(summary.actual_energy_gwh) : "—"}</strong></div>
+              <div><div className="small-label">Typical miss · MAE</div><strong>{summary.n ? mw(summary.mae_mw) : "—"}</strong></div>
+              <div><div className="small-label">Average error · bias</div><strong>{summary.n ? signedMw(summary.bias_mw) : "—"}</strong></div>
+              <div><div className="small-label">Matched data coverage</div><Badge tone={toneForCoverage(coverage)}>{pct(coverage)}</Badge></div>
+            </div>
+          </SectionCard>
           <div className="grid-2--even grid-2">
             <SectionCard
               title="Half-hour error"
-              description="Forecast minus actual. Positive values are over-forecasts; negative values are shortfalls."
+              description="Forecast minus actual. Positive: wind shortfall. Negative: more wind than forecast."
               actions={
                 <Badge tone="neutral">
                   <Clock3 size={12} /> UTC
@@ -487,7 +470,7 @@ export function DecisionRoom() {
               <div
                 className="chart chart--small"
                 role="img"
-                aria-label="Half-hourly forecast error; positive bars are over-forecasts and negative bars are shortfalls."
+                aria-label="Half-hourly forecast error; positive bars indicate wind shortfalls and negative bars indicate more wind than forecast."
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -529,7 +512,7 @@ export function DecisionRoom() {
 
             <SectionCard
               title="Largest misses"
-              description="The half-hours that would have hurt the most operationally."
+              description="Largest differences after delivery, ranked by absolute error."
             >
               <DataTable
                 columns={worstColumns}
@@ -539,6 +522,8 @@ export function DecisionRoom() {
               />
             </SectionCard>
           </div>
+
+          </> : null}
 
           <SectionCard
             eyebrow="Method"
@@ -564,10 +549,10 @@ export function DecisionRoom() {
         </>
       ) : null}
 
-      {decision && summary && summary.n === 0 ? (
+      {decision && decision.forecast_summary.hours === 0 ? (
         <EmptyState
-          title="No decision data for this day"
-          message="The cached snapshot does not have a matched forecast and actual for this date yet."
+          title="No pre-cut-off forecast for this day"
+          message="Choose another buying day. Missing forecast values are never shown as zero."
         />
       ) : null}
 

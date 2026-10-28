@@ -1,3 +1,5 @@
+> Historical script for the previous version. The cutoff, dates, UI and statistics have changed. Use the current app and README when preparing the author’s final video.
+
 # Demo video script (10 minutes max)
 
 Target length: **9:30**. Hard cap: 10:00. The assignment asks for roughly five

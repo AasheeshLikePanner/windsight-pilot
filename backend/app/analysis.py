@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import UTC, date, datetime, time, timedelta
 from statistics import mean
 
+from .config import GATE_CLOSURE_LABEL
 from .domain import Actual, DecisionPoint, Forecast
 from .store import Store
 from .timeutils import date_range, day_bounds, floor_hour, gate_closure_for, iso_utc
@@ -77,7 +78,11 @@ def decision_points_for_day(
     forecasts: Iterable[Forecast],
 ) -> list[DecisionPoint]:
     gate = gate_closure_for(delivery_day)
-    hourly = hourly_actuals(actuals)
+    actual_list = list(actuals)
+    hourly = hourly_actuals(actual_list)
+    availability: dict[datetime, list[datetime | None]] = defaultdict(list)
+    for actual in actual_list:
+        availability[floor_hour(actual.start_time)].append(actual.publish_time)
     latest = latest_forecasts(forecasts, gate)
     start = datetime.combine(delivery_day, time.min, tzinfo=UTC)
     points: list[DecisionPoint] = []
@@ -97,6 +102,9 @@ def decision_points_for_day(
                 forecast_publish_time=forecast.publish_time,
                 lead_time_hours=(start_time - forecast.publish_time).total_seconds()
                 / 3600,
+                actual_available_time=max(availability[start_time])
+                if all(value is not None for value in availability[start_time])
+                else None,
             )
         )
     return points
@@ -400,7 +408,17 @@ def decision_view(store: Store, day: date, all_points: Iterable[DecisionPoint]) 
     actuals = store.actuals_for_date(day)
     forecasts = store.forecasts_for_date(day, publish_to=gate)
     points = decision_points_for_day(day, actuals, forecasts)
-    quantiles = error_quantiles_by_level(all_points, exclude_date=day)
+    history = [
+        point
+        for point in all_points
+        if point.start_time + timedelta(hours=1) <= gate
+        and point.actual_available_time is not None
+        and point.actual_available_time <= gate
+        and point.forecast_publish_time <= gate
+    ]
+    quantiles = error_quantiles_by_level(history)
+    quantiles["method"] = "P10/P90 signed error available before this buying cut-off"
+    history_ready = len(history) >= MIN_BUCKET_SAMPLES
     latest = latest_forecasts(forecasts, gate)
 
     actual_by_start = {actual.start_time: actual for actual in actuals}
@@ -432,9 +450,11 @@ def decision_view(store: Store, day: date, all_points: Iterable[DecisionPoint]) 
                     "lead_time_hours": round(
                         (start_time - forecast.publish_time).total_seconds() / 3600, 1
                     ),
-                    "lower_mw": band["lower_mw"],
-                    "upper_mw": band["upper_mw"],
-                    "shortfall_buffer_mw": band["shortfall_buffer_mw"],
+                    "lower_mw": band["lower_mw"] if history_ready else None,
+                    "upper_mw": band["upper_mw"] if history_ready else None,
+                    "shortfall_buffer_mw": band["shortfall_buffer_mw"]
+                    if history_ready
+                    else None,
                     "uncertainty_level": band["level"],
                 }
             )
@@ -459,18 +479,34 @@ def decision_view(store: Store, day: date, all_points: Iterable[DecisionPoint]) 
             )
 
     summary = compute_metrics(points, expected_points=24)
-    latest_publish = max(
-        (point.forecast_publish_time for point in points),
-        default=max(
-            (forecast.publish_time for forecast in forecasts),
-            default=None,
-        ),
-    )
-    lead_hours = [point.lead_time_hours for point in points]
+    latest_publish = max((f.publish_time for f in latest.values()), default=None)
+    lead_hours = [
+        (f.start_time - f.publish_time).total_seconds() / 3600 for f in latest.values()
+    ]
     return {
         "date": day.isoformat(),
         "gate_closure": iso_utc(gate),
-        "gate_closure_label": "11:00 UK time, day before delivery",
+        "purchase_date": (day - timedelta(days=1)).isoformat(),
+        "gate_closure_label": GATE_CLOSURE_LABEL,
+        "forecast_summary": {
+            "hours": len(latest),
+            "energy_gwh": round(
+                sum(f.generation_mw for f in latest.values()) / 1000, 2
+            ),
+            "mean_mw": round(mean(f.generation_mw for f in latest.values()), 1)
+            if latest
+            else None,
+        },
+        "history": {
+            "ready": history_ready,
+            "minimum_points": MIN_BUCKET_SAMPLES,
+            "points": len(history),
+            "metrics": compute_metrics(history) if history_ready else None,
+            "from": min(
+                (p.start_time.date().isoformat() for p in history), default=None
+            ),
+            "to": max((p.start_time.date().isoformat() for p in history), default=None),
+        },
         "latest_publish_time": iso_utc(latest_publish)
         if latest_publish is not None
         else None,
@@ -495,13 +531,13 @@ def decision_view(store: Store, day: date, all_points: Iterable[DecisionPoint]) 
             ),
         },
         "notes": [
-            "The decision cut-off is 11:00 UK time on the day before delivery. "
+            "The decision cut-off is 09:50 UK time on the day before delivery (N2EX). "
             "The latest WINDFOR vintage published before that cut-off is used.",
             "WINDFOR is hourly. Half-hourly rows repeat the hourly forecast value; "
             "summary metrics are computed on hourly decision points.",
-            "The band is the leave-one-day-out P10/P90 of signed forecast error, "
-            "bucketed by forecast level. It is an empirical uncertainty range, "
-            "not a formal probabilistic forecast.",
+            "The band uses only earlier hourly errors whose actual publication "
+            "time is at or before this cut-off. A minimum of 20 points is required. "
+            "It is a small-sample historical range, not a calibrated probability.",
             "Positive error means the forecast over-predicted wind. The shortfall "
             "buffer is the P90 over-forecast: a reserve for covering wind coming in "
             "below the forecast.",
@@ -553,7 +589,8 @@ def accuracy_view(store: Store, start_day: date, end_day: date) -> dict:
             "The lead-time view uses every stored forecast vintage, so it shows "
             "how accuracy changes with horizon. It is not the decision-time view.",
             "Errors are forecast minus actual. Positive means over-forecast.",
-            "January 2026 national wind. Actuals: Elexon FUELHH (30 min). "
+            "January 2026 purchase decisions, for delivery 2 January–1 February. "
+            "Actuals: Elexon FUELHH (30 min). "
             "Forecasts: Elexon WINDFOR (hourly).",
         ],
     }

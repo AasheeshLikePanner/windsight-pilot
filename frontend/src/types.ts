@@ -94,6 +94,16 @@ export type Uncertainty = {
 
 export type Decision = {
   date: string;
+  purchase_date: string;
+  forecast_summary: { hours: number; energy_gwh: number; mean_mw: number | null };
+  history: {
+    ready: boolean;
+    minimum_points: number;
+    points: number;
+    metrics: Metrics | null;
+    from: string | null;
+    to: string | null;
+  };
   gate_closure: string;
   gate_closure_label: string;
   latest_publish_time: string | null;

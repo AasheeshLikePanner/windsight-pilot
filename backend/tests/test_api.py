@@ -9,7 +9,7 @@ from app.main import app
 from app.store import Store
 from tests.factories import seed_store
 
-DAYS = [date(2026, 1, 1), date(2026, 1, 2)]
+DAYS = [date(2026, 1, 2), date(2026, 1, 3)]
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def test_health_and_meta(client: TestClient) -> None:
     body = meta.json()
     assert body["name"] == "WindSight"
     assert body["data_ready"] is True
-    assert body["gate_closure"]["local_time"] == "11:00"
+    assert body["gate_closure"]["local_time"] == "09:50"
     assert body["counts"]["forecasts"] == 48
     assert body["last_ingest"]["status"] == "ok"
     assert body["last_ingest"]["finished_at"] is not None
@@ -55,23 +55,23 @@ def test_dates_defaults_to_last_day(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert [row["date"] for row in body["dates"]] == [
-        "2026-01-01",
         "2026-01-02",
+        "2026-01-03",
     ]
-    assert body["default"] == "2026-01-02"
+    assert body["default"] == "2026-01-03"
 
 
 def test_decision_view_for_a_day(client: TestClient) -> None:
-    response = client.get("/api/decision", params={"date": "2026-01-02"})
+    response = client.get("/api/decision", params={"date": "2026-01-03"})
     assert response.status_code == 200
     body = response.json()
-    assert body["date"] == "2026-01-02"
+    assert body["date"] == "2026-01-03"
     assert body["summary"]["n"] == 24
     assert body["summary"]["coverage_pct"] == 100.0
     assert len(body["periods"]) == 48
     assert body["data_quality"]["actual_periods"] == 48
     assert body["data_quality"]["missing_periods"] == 0
-    assert body["vintage"]["publish_time"] == "2026-01-01T09:30:00Z"
+    assert body["vintage"]["publish_time"] == "2026-01-02T09:30:00Z"
     assert body["vintage"]["forecast_hours"] == 24
     assert body["periods"][0]["forecast_mw"] == 11_000
     assert body["periods"][0]["actual_mw"] == 10_000
@@ -80,11 +80,11 @@ def test_decision_view_for_a_day(client: TestClient) -> None:
 
 def test_accuracy_view_for_range(client: TestClient) -> None:
     response = client.get(
-        "/api/accuracy", params={"from": "2026-01-01", "to": "2026-01-02"}
+        "/api/accuracy", params={"from": "2026-01-02", "to": "2026-01-03"}
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["range"] == {"from": "2026-01-01", "to": "2026-01-02"}
+    assert body["range"] == {"from": "2026-01-02", "to": "2026-01-03"}
     assert body["summary"]["n"] == 48
     assert body["summary"]["coverage_pct"] == 100.0
     assert len(body["daily"]) == 2
@@ -98,7 +98,7 @@ def test_invalid_requests_are_rejected(client: TestClient) -> None:
     assert client.get("/api/decision", params={"date": "15-01-2026"}).status_code == 400
     assert (
         client.get(
-            "/api/accuracy", params={"from": "2026-01-02", "to": "2026-01-01"}
+            "/api/accuracy", params={"from": "2026-01-03", "to": "2026-01-02"}
         ).status_code
         == 400
     )
@@ -136,8 +136,18 @@ def test_requests_outside_the_snapshot_are_rejected(client: TestClient) -> None:
 
     for params in (
         {"from": "0001-01-01", "to": "9999-12-31"},
-        {"from": "2026-01-01", "to": "2026-02-01"},
+        {"from": "2026-01-02", "to": "2026-02-02"},
     ):
         response = client.get("/api/accuracy", params=params)
         assert response.status_code == 400
         assert "between" in response.json()["detail"]
+
+
+def test_purchase_month_boundaries(client: TestClient) -> None:
+    first = client.get("/api/decision", params={"date": "2026-01-02"})
+    last = client.get("/api/decision", params={"date": "2026-02-01"})
+    assert first.status_code == last.status_code == 200
+    assert first.json()["purchase_date"] == "2026-01-01"
+    assert last.json()["purchase_date"] == "2026-01-31"
+    assert client.get("/api/decision", params={"date": "2026-01-01"}).status_code == 400
+    assert client.get("/api/decision", params={"date": "2026-02-02"}).status_code == 400

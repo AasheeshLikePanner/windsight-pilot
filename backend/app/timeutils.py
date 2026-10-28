@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from .config import GATE_CLOSURE_HOUR, TIMEZONE
+from .config import GATE_CLOSURE_HOUR, GATE_CLOSURE_MINUTE, TIMEZONE
 
 LOCAL_TZ = ZoneInfo(TIMEZONE)
 UTC = UTC
@@ -22,14 +22,10 @@ def iso_utc(value: datetime) -> str:
 
 
 def gate_closure_for(delivery_date: date) -> datetime:
-    """Day-ahead gate closure: 11:00 UK time on the day before delivery.
-
-    January is GMT, so this is 11:00 UTC for the pilot. Using the Europe/London
-    zone keeps the rule correct if the window is ever extended into summer.
-    """
+    """N2EX day-ahead gate closure, in the UK local timezone."""
     local = datetime.combine(
         delivery_date - timedelta(days=1),
-        time(hour=GATE_CLOSURE_HOUR, tzinfo=LOCAL_TZ),
+        time(hour=GATE_CLOSURE_HOUR, minute=GATE_CLOSURE_MINUTE, tzinfo=LOCAL_TZ),
     )
     return local.astimezone(UTC)
 
